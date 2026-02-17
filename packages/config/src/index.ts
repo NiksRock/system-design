@@ -18,4 +18,5 @@ export const baseEnvSchema = z.object({
   JWT_SECRET: z.string().min(32),
   JWT_EXPIRES_IN: z.string().default("1d"),
   ENCRYPTION_KEY: z.string().length(64),
+  REDIS_URL: z.string().url(),
 });

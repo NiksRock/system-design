@@ -8,6 +8,7 @@ import { HealthController } from './health.controller.js';
 import { AppService } from './app.service.js';
 import { AuthModule } from './auth/auth.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
+import { RedisModule } from './redis/redis.module.js';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -27,7 +28,7 @@ import { PrismaModule } from './prisma/prisma.module.js';
       },
     }),
     AuthModule,
-    PrismaModule,
+    PrismaModule,RedisModule
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],
