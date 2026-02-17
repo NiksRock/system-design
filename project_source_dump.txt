@@ -1,0 +1,1359 @@
+
+--- START OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/api/eslint.config.mjs ---
+
+import eslint from '@eslint/js';
+import tseslint from 'typescript-eslint';
+import prettier from 'eslint-config-prettier';
+
+export default tseslint.config(
+  // ✅ Ignore build + generated folders
+  {
+    ignores: ['dist/**', 'node_modules/**', 'eslint.config.mjs', '.turbo/**'],
+  },
+
+  // ✅ Base JS rules
+  eslint.configs.recommended,
+
+  // ✅ TypeScript recommended rules
+  ...tseslint.configs.recommended,
+
+  // ✅ Prettier disables conflicting formatting rules
+  prettier,
+
+  // ✅ Type-aware linting (Nest + Prisma)
+  {
+    languageOptions: {
+      parserOptions: {
+        project: './tsconfig.eslint.json',
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+
+    rules: {
+      // 🔥 Useful backend rules
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-floating-promises': 'warn',
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { argsIgnorePattern: '^_' },
+      ],
+    },
+  },
+);
+
+--- END OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/api/eslint.config.mjs ---
+
+
+--- START OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/api/nest-cli.json ---
+
+{
+  "$schema": "https://json.schemastore.org/nest-cli",
+  "collection": "@nestjs/schematics",
+  "sourceRoot": "src",
+  "entryFile": "main",
+  "compilerOptions": {
+    "deleteOutDir": true
+  }
+}
+
+--- END OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/api/nest-cli.json ---
+
+
+--- START OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/api/package.json ---
+
+{
+  "name": "api",
+  "version": "0.0.1",
+  "description": "",
+  "author": "",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "scripts": {
+    "format": "prettier --write \"src/**/*.ts\"",
+    "dev": "nest start --watch",
+    "build": "nest build -p tsconfig.build.json",
+    "start": "node dist/main.js",
+    "check-types": "tsc --noEmit",
+    "start:debug": "nest start --debug --watch",
+    "start:prod": "node dist/main.js",
+    "lint": "eslint . --max-warnings 0",
+    "prisma:validate": "prisma validate",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.0.1",
+    "@nestjs/config": "^4.0.3",
+    "@nestjs/core": "^11.0.1",
+    "@nestjs/platform-fastify": "^11.1.13",
+    "@prisma/client": "^7.4.0",
+    "@repo/config": "workspace:*",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.3",
+    "fastify": "^5.7.4",
+    "nestjs-pino": "^4.5.0",
+    "pino": "^10.3.1",
+    "pino-pretty": "^13.1.3",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@repo/tsconfig": "workspace:*",
+    "@eslint/eslintrc": "^3.2.0",
+    "@eslint/js": "^9.18.0",
+    "@nestjs/cli": "^11.0.0",
+    "@nestjs/schematics": "^11.0.0",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.7",
+    "eslint": "^9.18.0",
+    "eslint-config-prettier": "^10.0.1",
+    "prettier": "^3.4.2",
+    "prisma": "^7.4.0",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.20.0"
+  }
+}
+
+--- END OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/api/package.json ---
+
+
+--- START OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/api/prisma/prisma.config.ts ---
+
+import { defineConfig } from 'prisma/config';
+
+export default defineConfig({
+  schema: './prisma/schema.prisma',
+  datasource: {
+    url: process.env.DATABASE_URL!,
+  },
+});
+
+--- END OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/api/prisma/prisma.config.ts ---
+
+
+--- START OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/api/prisma/schema.prisma ---
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql" 
+}
+
+///////////////////////////////////////////////////////////////
+// USERS
+///////////////////////////////////////////////////////////////
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  primarySourceAccountId String?
+  destinationAccountId   String?
+
+  primarySourceAccount GoogleAccount? @relation("PrimarySource", fields: [primarySourceAccountId], references: [id], onDelete: SetNull)
+  destinationAccount   GoogleAccount? @relation("Destination", fields: [destinationAccountId], references: [id], onDelete: SetNull)
+
+  accounts GoogleAccount[]
+  jobs     TransferJob[]
+
+  @@index([primarySourceAccountId])
+  @@index([destinationAccountId])
+  @@index([email])
+}
+
+///////////////////////////////////////////////////////////////
+// GOOGLE ACCOUNTS
+///////////////////////////////////////////////////////////////
+
+model GoogleAccount {
+  id        String   @id @default(uuid())
+  userId    String
+
+  email                 String
+  avatarUrl             String?
+  refreshTokenEncrypted String
+
+  dailyBytesTransferred BigInt   @default(0)
+  lastQuotaReset        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  sourceJobs        TransferJob[] @relation("SourceAccount")
+  destinationJobs   TransferJob[] @relation("DestinationAccount")
+  primaryOwner      User[]        @relation("PrimarySource")
+  destinationOwner  User[]        @relation("Destination")
+
+  @@unique([userId, email])
+  @@index([userId])
+}
+
+///////////////////////////////////////////////////////////////
+// TRANSFER JOB
+///////////////////////////////////////////////////////////////
+
+model TransferJob {
+  id        String @id @default(uuid())
+  userId    String
+
+  sourceAccountId      String
+  destinationAccountId String
+
+  destinationFolderId String
+
+  mode   TransferMode
+  status TransferStatus @default(PENDING)
+
+  totalItems       Int    @default(0)
+  completedItems   Int    @default(0)
+  failedItems      Int    @default(0)
+  skippedItems     Int    @default(0)
+
+  totalBytes       BigInt @default(0)
+  transferredBytes BigInt @default(0)
+
+  riskFlags Json?
+  warnings  Json?
+
+  startedAt  DateTime?
+  pausedAt   DateTime?
+  finishedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  sourceAccount      GoogleAccount @relation("SourceAccount", fields: [sourceAccountId], references: [id])
+  destinationAccount GoogleAccount @relation("DestinationAccount", fields: [destinationAccountId], references: [id])
+
+  items  TransferItem[]
+  events TransferEvent[]
+  logs   TransferLog[]
+
+  @@index([status])
+  @@index([userId])
+  @@index([sourceAccountId])
+  @@index([destinationAccountId])
+  @@index([createdAt])
+}
+
+///////////////////////////////////////////////////////////////
+// TRANSFER ITEMS
+///////////////////////////////////////////////////////////////
+
+model TransferItem {
+  id    String @id @default(uuid())
+  jobId String
+
+  sourceFileId      String
+  sourceParentId    String?
+  destinationFileId String?
+
+  fileName  String
+  mimeType  String?
+  sizeBytes BigInt?
+
+  checksum String?
+  depth    Int @default(0)
+
+  status       ItemStatus @default(PENDING)
+  retryCount   Int        @default(0)
+  errorMessage String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  job TransferJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, sourceFileId])
+
+  @@index([jobId])
+  @@index([status])
+  @@index([sourceFileId])
+  @@index([destinationFileId])
+  @@index([createdAt])
+}
+
+///////////////////////////////////////////////////////////////
+// TRANSFER EVENTS
+///////////////////////////////////////////////////////////////
+
+model TransferEvent {
+  id    String @id @default(uuid())
+  jobId String
+
+  type     String
+  message  String?
+  metadata Json?
+
+  createdAt DateTime @default(now())
+
+  job TransferJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+  @@index([type])
+}
+
+///////////////////////////////////////////////////////////////
+// TRANSFER LOGS
+///////////////////////////////////////////////////////////////
+
+model TransferLog {
+  id    String @id @default(uuid())
+  jobId String
+
+  level   LogLevel
+  action  String
+  context Json?
+
+  createdAt DateTime @default(now())
+
+  job TransferJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+  @@index([level])
+}
+
+///////////////////////////////////////////////////////////////
+// ENUMS
+///////////////////////////////////////////////////////////////
+
+enum TransferMode {
+  COPY
+  MOVE
+}
+
+enum TransferStatus {
+  PENDING
+  RUNNING
+  PAUSED
+  COMPLETED
+  FAILED
+  CANCELLED
+  AUTO_PAUSED_QUOTA
+}
+
+enum ItemStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  SKIPPED
+  VERIFYING
+}
+
+enum LogLevel {
+  INFO
+  WARNING
+  ERROR
+}
+
+--- END OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/api/prisma/schema.prisma ---
+
+
+--- START OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/api/src/app.controller.ts ---
+
+import { Controller, Get } from '@nestjs/common';
+import { AppService } from './app.service.js';
+@Controller()
+export class AppController {
+  constructor(private readonly appService: AppService) {}
+
+  @Get()
+  getHello(): string {
+    return this.appService.getHello();
+  }
+}
+
+--- END OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/api/src/app.controller.ts ---
+
+
+--- START OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/api/src/app.module.ts ---
+
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { baseEnvSchema } from '@repo/config';
+
+import { LoggerModule } from 'nestjs-pino';
+import { AppController } from './app.controller.js';
+import { HealthController } from './health.controller.js';
+import { AppService } from './app.service.js';
+console.log('NODE_ENV =', JSON.stringify(process.env.NODE_ENV));
+
+@Module({
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: ['apps/api/.env', '.env'],
+      validate: (config) => baseEnvSchema.parse(config),
+    }),
+    LoggerModule.forRoot({
+      pinoHttp: {
+        transport:
+          process.env.NODE_ENV !== 'production'
+            ? {
+                target: 'pino-pretty',
+                options: { singleLine: true },
+              }
+            : undefined,
+      },
+    }),
+  ],
+  controllers: [AppController, HealthController],
+  providers: [AppService],
+})
+export class AppModule {}
+
+--- END OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/api/src/app.module.ts ---
+
+
+--- START OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/api/src/app.service.ts ---
+
+import { Injectable } from '@nestjs/common';
+
+@Injectable()
+export class AppService {
+  getHello(): string {
+    return 'Hello World!';
+  }
+}
+
+--- END OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/api/src/app.service.ts ---
+
+
+--- START OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/api/src/common/filters/http-exception.filter.ts ---
+
+import {
+  ExceptionFilter,
+  Catch,
+  ArgumentsHost,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
+import { FastifyReply } from 'fastify';
+
+@Catch()
+export class AllExceptionsFilter implements ExceptionFilter {
+  catch(exception: unknown, host: ArgumentsHost) {
+    const ctx = host.switchToHttp();
+    const response = ctx.getResponse<FastifyReply>();
+
+    const status =
+      exception instanceof HttpException
+        ? exception.getStatus()
+        : HttpStatus.INTERNAL_SERVER_ERROR;
+
+    response.status(status).send({
+      statusCode: status,
+      timestamp: new Date().toISOString(),
+      path: ctx.getRequest().url,
+      message:
+        exception instanceof HttpException
+          ? exception.message
+          : 'Internal server error',
+    });
+  }
+}
+
+--- END OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/api/src/common/filters/http-exception.filter.ts ---
+
+
+--- START OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/api/src/health.controller.ts ---
+
+import { Controller, Get } from '@nestjs/common';
+
+@Controller('health')
+export class HealthController {
+  @Get('live')
+  live() {
+    return { status: 'ok' };
+  }
+
+  @Get('ready')
+  ready() {
+    return { status: 'ready' };
+  }
+}
+
+--- END OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/api/src/health.controller.ts ---
+
+
+--- START OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/api/src/main.ts ---
+
+import { NestFactory } from '@nestjs/core';
+import {
+  FastifyAdapter,
+  NestFastifyApplication,
+} from '@nestjs/platform-fastify';
+import { ConfigService } from '@nestjs/config';
+import { Logger } from 'nestjs-pino';
+import { ValidationPipe } from '@nestjs/common';
+import { AppModule } from './app.module.js';
+import { AllExceptionsFilter } from './common/filters/http-exception.filter.js';
+
+async function bootstrap(): Promise<void> {
+  const app = await NestFactory.create<NestFastifyApplication>(
+    AppModule,
+    new FastifyAdapter(),
+    { bufferLogs: true },
+  );
+
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
+  );
+
+  app.useGlobalFilters(new AllExceptionsFilter());
+  app.useLogger(app.get(Logger));
+
+  const configService = app.get(ConfigService);
+
+  app.enableShutdownHooks();
+  app.setGlobalPrefix('api');
+
+  await app.listen({
+    port: configService.getOrThrow<number>('PORT'),
+    host: '0.0.0.0',
+  });
+
+  // ✅ Ensure Fastify is fully ready
+  await app.getHttpAdapter().getInstance().ready();
+}
+
+// ✅ Proper top-level promise handling (fixes no-floating-promises)
+bootstrap().catch((err) => {
+  console.error('❌ Application failed to start', err);
+  process.exit(1);
+});
+
+--- END OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/api/src/main.ts ---
+
+
+--- START OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/api/tsconfig.eslint.json ---
+
+{
+  "extends": "./tsconfig.json",
+  "include": ["src/**/*.ts", "prisma/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}
+
+--- END OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/api/tsconfig.eslint.json ---
+
+
+--- START OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/api/tsconfig.json ---
+
+{
+  "extends": "@repo/tsconfig/base.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2023",
+    "outDir": "./dist",
+    "incremental": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}
+
+--- END OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/api/tsconfig.json ---
+
+
+--- START OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/web/app/globals.css ---
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.imgDark {
+  display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  html {
+    color-scheme: dark;
+  }
+
+  .imgLight {
+    display: none;
+  }
+  .imgDark {
+    display: unset;
+  }
+}
+
+--- END OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/web/app/globals.css ---
+
+
+--- START OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/web/app/page.module.css ---
+
+.page {
+  --gray-rgb: 0, 0, 0;
+  --gray-alpha-200: rgba(var(--gray-rgb), 0.08);
+  --gray-alpha-100: rgba(var(--gray-rgb), 0.05);
+
+  --button-primary-hover: #383838;
+  --button-secondary-hover: #f2f2f2;
+
+  display: grid;
+  grid-template-rows: 20px 1fr 20px;
+  align-items: center;
+  justify-items: center;
+  min-height: 100svh;
+  padding: 80px;
+  gap: 64px;
+  font-synthesis: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  .page {
+    --gray-rgb: 255, 255, 255;
+    --gray-alpha-200: rgba(var(--gray-rgb), 0.145);
+    --gray-alpha-100: rgba(var(--gray-rgb), 0.06);
+
+    --button-primary-hover: #ccc;
+    --button-secondary-hover: #1a1a1a;
+  }
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  grid-row-start: 2;
+}
+
+.main ol {
+  font-family: var(--font-geist-mono);
+  padding-left: 0;
+  margin: 0;
+  font-size: 14px;
+  line-height: 24px;
+  letter-spacing: -0.01em;
+  list-style-position: inside;
+}
+
+.main li:not(:last-of-type) {
+  margin-bottom: 8px;
+}
+
+.main code {
+  font-family: inherit;
+  background: var(--gray-alpha-100);
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.ctas {
+  display: flex;
+  gap: 16px;
+}
+
+.ctas a {
+  appearance: none;
+  border-radius: 128px;
+  height: 48px;
+  padding: 0 20px;
+  font-family: var(--font-geist-sans);
+  border: 1px solid transparent;
+  transition:
+    background 0.2s,
+    color 0.2s,
+    border-color 0.2s;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  line-height: 20px;
+  font-weight: 500;
+}
+
+a.primary {
+  background: var(--foreground);
+  color: var(--background);
+  gap: 8px;
+}
+
+a.secondary {
+  border-color: var(--gray-alpha-200);
+  min-width: 180px;
+}
+
+button.secondary {
+  appearance: none;
+  border-radius: 128px;
+  height: 48px;
+  padding: 0 20px;
+  font-family: var(--font-geist-sans);
+  border: 1px solid transparent;
+  transition:
+    background 0.2s,
+    color 0.2s,
+    border-color 0.2s;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  line-height: 20px;
+  font-weight: 500;
+  background: transparent;
+  border-color: var(--gray-alpha-200);
+  min-width: 180px;
+}
+
+.footer {
+  font-family: var(--font-geist-sans);
+  grid-row-start: 3;
+  display: flex;
+  gap: 24px;
+}
+
+.footer a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.footer img {
+  flex-shrink: 0;
+}
+
+/* Enable hover only on non-touch devices */
+@media (hover: hover) and (pointer: fine) {
+  a.primary:hover {
+    background: var(--button-primary-hover);
+    border-color: transparent;
+  }
+
+  a.secondary:hover {
+    background: var(--button-secondary-hover);
+    border-color: transparent;
+  }
+
+  .footer a:hover {
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }
+}
+
+@media (max-width: 600px) {
+  .page {
+    padding: 32px;
+    padding-bottom: 80px;
+  }
+
+  .main {
+    align-items: center;
+  }
+
+  .main ol {
+    text-align: center;
+  }
+
+  .ctas {
+    flex-direction: column;
+  }
+
+  .ctas a {
+    font-size: 14px;
+    height: 40px;
+    padding: 0 16px;
+  }
+
+  a.secondary {
+    min-width: auto;
+  }
+
+  .footer {
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .logo {
+    filter: invert();
+  }
+}
+
+--- END OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/web/app/page.module.css ---
+
+
+--- START OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/web/app/page.tsx ---
+
+import Image, { type ImageProps } from 'next/image';
+import styles from './page.module.css';
+
+type Props = Omit<ImageProps, 'src'> & {
+  srcLight: string;
+  srcDark: string;
+};
+
+const ThemeImage = (props: Props) => {
+  const { srcLight, srcDark, ...rest } = props;
+
+  return (
+    <>
+      <Image {...rest} src={srcLight} className="imgLight" />
+      <Image {...rest} src={srcDark} className="imgDark" />
+    </>
+  );
+};
+
+export default function Home() {
+  return (
+    <div className={styles.page}>
+      <main className={styles.main}>
+        <ThemeImage
+          className={styles.logo}
+          srcLight="turborepo-dark.svg"
+          srcDark="turborepo-light.svg"
+          alt="Turborepo logo"
+          width={180}
+          height={38}
+          priority
+        />
+        <ol>
+          <li>
+            Get started by editing <code>apps/web/app/page.tsx</code>
+          </li>
+          <li>Save and see your changes instantly.</li>
+        </ol>
+
+        <div className={styles.ctas}>
+          <a
+            className={styles.primary}
+            href="https://vercel.com/new/clone?demo-description=Learn+to+implement+a+monorepo+with+a+two+Next.js+sites+that+has+installed+three+local+packages.&demo-image=%2F%2Fimages.ctfassets.net%2Fe5382hct74si%2F4K8ZISWAzJ8X1504ca0zmC%2F0b21a1c6246add355e55816278ef54bc%2FBasic.png&demo-title=Monorepo+with+Turborepo&demo-url=https%3A%2F%2Fexamples-basic-web.vercel.sh%2F&from=templates&project-name=Monorepo+with+Turborepo&repository-name=monorepo-turborepo&repository-url=https%3A%2F%2Fgithub.com%2Fvercel%2Fturborepo%2Ftree%2Fmain%2Fexamples%2Fbasic&root-directory=apps%2Fdocs&skippable-integrations=1&teamSlug=vercel&utm_source=create-turbo"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <Image
+              className={styles.logo}
+              src="/vercel.svg"
+              alt="Vercel logomark"
+              width={20}
+              height={20}
+            />
+            Deploy now
+          </a>
+          <a
+            href="https://turborepo.dev/docs?utm_source"
+            target="_blank"
+            rel="noopener noreferrer"
+            className={styles.secondary}
+          >
+            Read our docs
+          </a>
+        </div>
+      </main>
+      <footer className={styles.footer}>
+        <a
+          href="https://vercel.com/templates?search=turborepo&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <Image
+            aria-hidden
+            src="/window.svg"
+            alt="Window icon"
+            width={16}
+            height={16}
+          />
+          Examples
+        </a>
+        <a
+          href="https://turborepo.dev?utm_source=create-turbo"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <Image
+            aria-hidden
+            src="/globe.svg"
+            alt="Globe icon"
+            width={16}
+            height={16}
+          />
+          Go to turborepo.dev →
+        </a>
+      </footer>
+    </div>
+  );
+}
+
+--- END OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/web/app/page.tsx ---
+
+
+--- START OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/web/eslint.config.js ---
+
+import js from '@eslint/js';
+import tseslint from 'typescript-eslint';
+import next from '@next/eslint-plugin-next';
+import prettier from 'eslint-config-prettier';
+
+import react from 'eslint-plugin-react';
+import reactHooks from 'eslint-plugin-react-hooks';
+import jsxA11y from 'eslint-plugin-jsx-a11y';
+
+export default [
+  // ✅ Global ignores
+  {
+    ignores: ['.next/**', 'node_modules/**', 'dist/**', 'out/**', '.turbo/**'],
+  },
+
+  // ✅ Base JS rules
+  js.configs.recommended,
+
+  // ✅ TypeScript recommended rules
+  ...tseslint.configs.recommended,
+
+  // ✅ Prettier disables conflicting ESLint formatting rules
+  prettier,
+
+  // ✅ Next + React full rules (type-aware)
+  {
+    files: ['**/*.{ts,tsx}'],
+
+    languageOptions: {
+      parser: tseslint.parser,
+      parserOptions: {
+        project: './tsconfig.eslint.json',
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+
+    plugins: {
+      react,
+      'react-hooks': reactHooks,
+      'jsx-a11y': jsxA11y,
+      '@next/next': next,
+    },
+
+    rules: {
+      // ✅ React rules
+      ...react.configs.recommended.rules,
+
+      // ✅ Hooks rules (important)
+      ...reactHooks.configs.recommended.rules,
+
+      // ✅ Accessibility rules
+      ...jsxA11y.configs.recommended.rules,
+
+      // ✅ Next.js rules
+      ...next.configs.recommended.rules,
+      ...next.configs['core-web-vitals'].rules,
+
+      // ✅ React 19 fix
+      'react/react-in-jsx-scope': 'off',
+    },
+
+    settings: {
+      react: {
+        version: 'detect',
+      },
+    },
+  },
+];
+
+--- END OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/web/eslint.config.js ---
+
+
+--- START OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/web/next-env.d.ts ---
+
+/// <reference types="next" />
+/// <reference types="next/image-types/global" />
+import "./.next/types/routes.d.ts";
+
+// NOTE: This file should not be edited
+// see https://nextjs.org/docs/app/api-reference/config/typescript for more information.
+
+--- END OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/web/next-env.d.ts ---
+
+
+--- START OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/web/next.config.js ---
+
+/** @type {import('next').NextConfig} */
+const nextConfig = {};
+
+export default nextConfig;
+
+--- END OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/web/next.config.js ---
+
+
+--- START OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/web/package.json ---
+
+{
+  "name": "web",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 3000",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint . --max-warnings 0",
+    "check-types": "next typegen && tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "16.1.5",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "@next/eslint-plugin-next": "^16.1.6",
+    "@repo/tsconfig": "workspace:*",
+    "@types/node": "^22.15.3",
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.2",
+    "@typescript-eslint/parser": "^8.56.0",
+    "eslint": "^9.39.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "typescript": "5.9.2",
+    "typescript-eslint": "^8.56.0"
+  }
+}
+
+--- END OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/web/package.json ---
+
+
+--- START OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/web/tsconfig.eslint.json ---
+
+{
+  "extends": "./tsconfig.json",
+  "include": ["**/*.ts", "**/*.tsx", "next-env.d.ts", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}
+
+--- END OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/web/tsconfig.eslint.json ---
+
+
+--- START OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/web/tsconfig.json ---
+
+{
+  "extends": "@repo/tsconfig/base.json",
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ]
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "next-env.d.ts",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
+  ],
+  "exclude": ["node_modules"]
+}
+
+--- END OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/web/tsconfig.json ---
+
+
+--- START OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/package.json ---
+
+{
+  "name": "gdrivebridge",
+  "private": true,
+  "packageManager": "pnpm@10.29.3",
+  "engines": {
+    "node": ">=18.18.0"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "check-types": "turbo run check-types",
+    "format": "prettier --write .",
+    "clean": "rimraf node_modules .turbo pnpm-lock.yaml apps/*/node_modules packages/*/node_modules"
+  },
+  "devDependencies": {
+    "prettier": "^3.7.4",
+    "rimraf": "^6.1.3",
+    "turbo": "^2.8.9",
+    "typescript": "5.9.2"
+  }
+}
+
+--- END OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/package.json ---
+
+
+--- START OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/packages/config/package.json ---
+
+{
+  "name": "@repo/config",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@repo/tsconfig": "workspace:*"
+  }
+}
+
+--- END OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/packages/config/package.json ---
+
+
+--- START OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/packages/config/src/index.ts ---
+
+import { z } from 'zod';
+export const baseEnvSchema = z.object({
+  NODE_ENV: z
+    .enum(['development', 'production', 'test'])
+    .default('development'),
+
+  PORT: z.coerce.number().default(3002),
+
+  DATABASE_URL: z.string().url(),
+
+  GOOGLE_CLIENT_ID: z.string(),
+  GOOGLE_CLIENT_SECRET: z.string(),
+  JWT_SECRET: z.string(),
+});
+
+--- END OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/packages/config/src/index.ts ---
+
+
+--- START OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/packages/config/tsconfig.json ---
+
+{
+  "extends": "@repo/tsconfig/base.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2023",
+    "declaration": true,
+    "declarationMap": true,
+    "outDir": "dist",
+    "emitDeclarationOnly": false,
+    "isolatedModules": true
+  },
+  "include": ["src"]
+}
+
+--- END OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/packages/config/tsconfig.json ---
+
+
+--- START OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/packages/tsconfig/base.json ---
+
+{
+  "compilerOptions": {
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  }
+}
+
+--- END OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/packages/tsconfig/base.json ---
+
+
+--- START OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/packages/tsconfig/package.json ---
+
+{
+  "name": "@repo/tsconfig",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./base.json": "./base.json"
+  }
+}
+
+--- END OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/packages/tsconfig/package.json ---
+
+
+--- START OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/pnpm-workspace.yaml ---
+
+packages:
+  - apps/*
+  - packages/*
+
+--- END OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/pnpm-workspace.yaml ---
+
+
+--- START OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/print-structure.ps1 ---
+
+$outputFile = "project_source_dump.txt"
+
+# Directories to exclude (non-developer / generated / cache)
+$excludeDirs = @(
+    "node_modules",
+    ".turbo",
+    ".vite",
+    ".git",
+    ".pnpm",
+    "dist",
+    "build",
+    "coverage",
+    "out",
+    ".next",
+    ".output",
+    ".cache",
+    ".vercel",
+    ".idea",
+    ".vscode",
+    "prisma/migrations",
+    "tmp",
+    "temp",
+    "logs"
+)
+
+# File extensions to exclude (binary / generated / static assets)
+$excludeExtensions = @(
+    ".woff", ".woff2",
+    ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico",
+    ".mp4", ".webm", ".mov",
+    ".pdf",
+    ".log",
+    ".zip", ".tar", ".gz",
+    ".tsbuildinfo",".txt"
+)
+
+# Specific files to exclude
+$excludeFiles = @(
+    "project_source_dump.txt",
+    "package-lock.json",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+    ".env",
+    ".env.local",
+    ".env.development",
+    ".env.production",
+    ".env.test",
+    "tsconfig.tsbuildinfo",
+    "README.md"
+)
+
+# Clear output file
+New-Item -ItemType File -Path $outputFile -Force | Out-Null
+
+# Get current directory dynamically
+$rootPath = (Get-Location).Path
+
+Get-ChildItem -Recurse -File | Sort-Object FullName | ForEach-Object {
+
+    $fullPath = $_.FullName
+    $relativePath = $fullPath.Replace("$rootPath\", "")
+
+    # Skip excluded directories
+    if ($excludeDirs | Where-Object { $relativePath -like "*$_*" }) { return }
+
+    # Skip excluded extensions
+    if ($excludeExtensions -contains $_.Extension) { return }
+
+    # Skip excluded files
+    if ($excludeFiles -contains $_.Name) { return }
+
+    Add-Content -Path $outputFile -Value "`n--- START OF FILE: $relativePath ---`n"
+    Get-Content -Path $fullPath | Add-Content -Path $outputFile
+    Add-Content -Path $outputFile -Value "`n--- END OF FILE: $relativePath ---`n"
+}
+
+Write-Host "✅ Developer source dump written to $outputFile" -ForegroundColor Green
+
+--- END OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/print-structure.ps1 ---
+
+
+--- START OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/turbo.json ---
+
+{
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "lint": {
+      "outputs": []
+    },
+    "check-types": {
+      "outputs": []
+    }
+  }
+}
+
+--- END OF FILE: /Users/nikunjpatel/Work/Personal/new/gdrivebridge/turbo.json ---
+

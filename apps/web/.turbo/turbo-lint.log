@@ -1,0 +1,5 @@
+
+
+> web@0.1.0 lint /Users/nikunjpatel/Work/Personal/new/gdrivebridge/apps/web
+> eslint . --max-warnings 0
+
