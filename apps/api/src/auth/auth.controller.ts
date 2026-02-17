@@ -4,13 +4,12 @@ import {
   Query,
   Req,
   Res,
-  UnauthorizedException,
-  UseGuards,
+  UseGuards
 } from '@nestjs/common';
-import { FastifyReply, FastifyRequest } from 'fastify';
-import { randomUUID } from 'crypto';
-import { AuthService } from './auth.service.js';
 import { ConfigService } from '@nestjs/config';
+import { randomUUID } from 'crypto';
+import { FastifyReply, FastifyRequest } from 'fastify';
+import { AuthService } from './auth.service.js';
 import { JwtGuard } from './jwt.guard.js';
 
 @Controller('auth')
@@ -21,7 +20,7 @@ export class AuthController {
   ) {}
 
   @Get('google')
-  google(@Res() res: FastifyReply) {
+  google(@Res({ passthrough: false }) res: FastifyReply) {
     const state = randomUUID();
 
     res.setCookie('oauth_state', state, {
@@ -34,7 +33,7 @@ export class AuthController {
 
     const url = this.auth.buildGoogleAuthUrl(state);
 
-    return res.redirect(url);
+    res.status(302).redirect(url);
   }
 
   @Get('google/callback')
@@ -44,30 +43,39 @@ export class AuthController {
     @Req() req: FastifyRequest,
     @Res() res: FastifyReply,
   ) {
-    const cookieState = (req.cookies as Record<string, string>)?.oauth_state;
+    try {
+      const cookieState = (req.cookies as Record<string, string>)?.oauth_state;
 
-    if (!state || state !== cookieState) {
-      throw new UnauthorizedException('Invalid OAuth state');
+      if (!state || state !== cookieState) {
+        throw new Error('Invalid OAuth state');
+      }
+
+      if (!code) {
+        throw new Error('Missing code');
+      }
+
+      const user = await this.auth.handleGoogleCallback(code);
+
+      const jwt = this.auth.signJwt(user.id);
+
+      res.setCookie('access_token', jwt, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 60 * 60 * 24,
+      });
+
+      res.clearCookie('oauth_state');
+
+      res.status(302).redirect(this.config.getOrThrow<string>('FRONTEND_URL'));
+    } catch (err) {
+      console.error('🔥 CALLBACK ERROR:', err);
+      return res.status(500).send({
+        error: (err as Error).message,
+        stack: (err as Error).stack,
+      });
     }
-
-    if (!code) {
-      throw new UnauthorizedException('Missing code');
-    }
-
-    const user = await this.auth.handleGoogleCallback(code);
-
-    const jwt = this.auth.signJwt(user.id);
-
-    res.setCookie('access_token', jwt, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-    });
-
-    res.clearCookie('oauth_state');
-
-    return res.redirect(this.config.getOrThrow<string>('FRONTEND_URL'));
   }
 
   @UseGuards(JwtGuard)

@@ -41,7 +41,8 @@ export default tseslint.config(
 
     rules: {
       // 🔥 Useful backend rules
-      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-explicit-any': 'error',
+
       '@typescript-eslint/no-floating-promises': 'warn',
       '@typescript-eslint/no-unused-vars': [
         'warn',
@@ -95,12 +96,15 @@ export default tseslint.config(
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
+    "@fastify/helmet": "^13.0.2",
+    "@fastify/rate-limit": "^10.3.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.3",
     "@nestjs/core": "^11.0.1",
     "@nestjs/jwt": "^11.0.2",
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-fastify": "^11.1.13",
+    "@prisma/adapter-pg": "^7.4.0",
     "@prisma/client": "^7.4.0",
     "@repo/config": "workspace:*",
     "class-transformer": "^0.5.1",
@@ -109,6 +113,7 @@ export default tseslint.config(
     "nestjs-pino": "^4.5.0",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
+    "pg": "^8.18.0",
     "pino": "^10.3.1",
     "pino-pretty": "^13.1.3",
     "reflect-metadata": "^0.2.2",
@@ -122,8 +127,11 @@ export default tseslint.config(
     "@nestjs/schematics": "^11.0.0",
     "@repo/tsconfig": "workspace:*",
     "@types/express": "^5.0.0",
+    "@types/ms": "^2.1.0",
     "@types/node": "^22.10.7",
     "@types/passport-google-oauth20": "^2.0.17",
+    "@types/pg": "^8.16.0",
+    "dotenv": "^17.3.1",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",
     "prettier": "^3.4.2",
@@ -140,12 +148,13 @@ export default tseslint.config(
 
 --- START OF FILE: apps\api\prisma\prisma.config.ts ---
 
+import 'dotenv/config';
 import { defineConfig } from 'prisma/config';
 
 export default defineConfig({
   schema: './prisma/schema.prisma',
   datasource: {
-    url: process.env.DATABASE_URL!,
+    url: process.env.DATABASE_URL,
   },
 });
 
@@ -159,15 +168,17 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql" 
+  provider = "postgresql"
+  relationMode = "foreignKeys"
 }
+
 
 ///////////////////////////////////////////////////////////////
 // USERS
 ///////////////////////////////////////////////////////////////
 
 model User {
-  id        String   @id @default(uuid())
+  id String @id @default(uuid()) @db.Uuid
   email     String   @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -191,14 +202,14 @@ model User {
 ///////////////////////////////////////////////////////////////
 
 model GoogleAccount {
-  id        String   @id @default(uuid())
+  id String @id @default(uuid()) @db.Uuid
   userId    String
 
   email                 String
   avatarUrl             String?
   refreshTokenEncrypted String
 
-  dailyBytesTransferred BigInt   @default(0)
+  dailyBytesTransferred BigInt @default(0) @db.BigInt
   lastQuotaReset        DateTime?
 
   createdAt DateTime @default(now())
@@ -220,7 +231,7 @@ model GoogleAccount {
 ///////////////////////////////////////////////////////////////
 
 model TransferJob {
-  id        String @id @default(uuid())
+  id String @id @default(uuid()) @db.Uuid
   userId    String
 
   sourceAccountId      String
@@ -270,7 +281,7 @@ model TransferJob {
 ///////////////////////////////////////////////////////////////
 
 model TransferItem {
-  id    String @id @default(uuid())
+  id String @id @default(uuid()) @db.Uuid
   jobId String
 
   sourceFileId      String
@@ -298,6 +309,7 @@ model TransferItem {
   @@index([jobId])
   @@index([status])
   @@index([sourceFileId])
+  @@index([jobId, status])
   @@index([destinationFileId])
   @@index([createdAt])
 }
@@ -307,7 +319,7 @@ model TransferItem {
 ///////////////////////////////////////////////////////////////
 
 model TransferEvent {
-  id    String @id @default(uuid())
+  id String @id @default(uuid()) @db.Uuid
   jobId String
 
   type     String
@@ -327,7 +339,7 @@ model TransferEvent {
 ///////////////////////////////////////////////////////////////
 
 model TransferLog {
-  id    String @id @default(uuid())
+  id String @id @default(uuid()) @db.Uuid
   jobId String
 
   level   LogLevel
@@ -407,6 +419,7 @@ import { AppController } from './app.controller.js';
 import { HealthController } from './health.controller.js';
 import { AppService } from './app.service.js';
 import { AuthModule } from './auth/auth.module.js';
+import { PrismaModule } from './prisma/prisma.module.js';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -424,7 +437,9 @@ import { AuthModule } from './auth/auth.module.js';
               }
             : undefined,
       },
-    }),AuthModule
+    }),
+    AuthModule,
+    PrismaModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],
@@ -448,14 +463,363 @@ export class AppService {
 --- END OF FILE: apps\api\src\app.service.ts ---
 
 
+--- START OF FILE: apps\api\src\auth\auth.controller.ts ---
+
+import {
+  Controller,
+  Get,
+  Query,
+  Req,
+  Res,
+  UnauthorizedException,
+  UseGuards,
+} from '@nestjs/common';
+import { FastifyReply, FastifyRequest } from 'fastify';
+import { randomUUID } from 'crypto';
+import { AuthService } from './auth.service.js';
+import { ConfigService } from '@nestjs/config';
+import { JwtGuard } from './jwt.guard.js';
+
+@Controller('auth')
+export class AuthController {
+  constructor(
+    private readonly auth: AuthService,
+    private readonly config: ConfigService,
+  ) {}
+
+  @Get('google')
+  google(@Res({ passthrough: false }) res: FastifyReply) {
+    const state = randomUUID();
+
+    res.setCookie('oauth_state', state, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 300,
+    });
+
+    const url = this.auth.buildGoogleAuthUrl(state);
+
+    res.status(302).redirect(url);
+  }
+
+  @Get('google/callback')
+  async callback(
+    @Query('code') code: string,
+    @Query('state') state: string,
+    @Req() req: FastifyRequest,
+    @Res() res: FastifyReply,
+  ) {
+    try {
+      const cookieState = (req.cookies as Record<string, string>)?.oauth_state;
+
+      if (!state || state !== cookieState) {
+        throw new Error('Invalid OAuth state');
+      }
+
+      if (!code) {
+        throw new Error('Missing code');
+      }
+
+      const user = await this.auth.handleGoogleCallback(code);
+
+      const jwt = this.auth.signJwt(user.id);
+
+      res.setCookie('access_token', jwt, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 60 * 60 * 24,
+      });
+
+      res.clearCookie('oauth_state');
+
+      res.status(302).redirect(this.config.getOrThrow<string>('FRONTEND_URL'));
+    } catch (err) {
+      console.error('🔥 CALLBACK ERROR:', err);
+      return res.status(500).send({
+        error: (err as Error).message,
+        stack: (err as Error).stack,
+      });
+    }
+  }
+
+  @UseGuards(JwtGuard)
+  @Get('me')
+  me(@Req() req: FastifyRequest) {
+    return {
+      user: req.user,
+    };
+  }
+
+  @Get('logout')
+  logout(@Res() res: FastifyReply) {
+    res.clearCookie('access_token', { path: '/' });
+    return res.send({ success: true });
+  }
+}
+
+--- END OF FILE: apps\api\src\auth\auth.controller.ts ---
+
+
 --- START OF FILE: apps\api\src\auth\auth.module.ts ---
 
 import { Module } from '@nestjs/common';
+import { JwtModule } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
+import { PrismaModule } from '../prisma/prisma.module.js';
+import { AuthService } from './auth.service.js';
+import { AuthController } from './auth.controller.js';
+import { JwtGuard } from './jwt.guard.js';
 
-@Module({})
+@Module({
+  imports: [
+    PrismaModule,
+    JwtModule.registerAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        secret: config.getOrThrow<string>('JWT_SECRET'),
+        signOptions: {
+          expiresIn: config.getOrThrow<string>(
+            'JWT_EXPIRES_IN',
+          ) as import('ms').StringValue,
+        },
+      }),
+    }),
+  ],
+  controllers: [AuthController],
+  providers: [AuthService, JwtGuard],
+  exports: [JwtGuard],
+})
 export class AuthModule {}
 
 --- END OF FILE: apps\api\src\auth\auth.module.ts ---
+
+
+--- START OF FILE: apps\api\src\auth\auth.service.ts ---
+
+import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { PrismaService } from '../prisma/prisma.service.js';
+import { JwtService } from '@nestjs/jwt';
+import { encrypt } from '../common/crypto/encryption.util.js';
+
+type GoogleTokenResponse = {
+  access_token: string;
+  id_token: string;
+  refresh_token?: string;
+};
+
+type GoogleUserInfo = {
+  sub: string;
+  email: string;
+  email_verified: boolean;
+  picture?: string;
+};
+
+@Injectable()
+export class AuthService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+    private readonly jwt: JwtService,
+  ) {}
+
+  buildGoogleAuthUrl(state: string): string {
+    const params = new URLSearchParams({
+      client_id: this.config.getOrThrow<string>('GOOGLE_CLIENT_ID'),
+      redirect_uri: this.config.getOrThrow<string>('GOOGLE_REDIRECT_URI'),
+      response_type: 'code',
+      scope: 'openid email profile',
+      access_type: 'offline',
+      prompt: 'consent',
+      state,
+    });
+
+    return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+  }
+
+  async handleGoogleCallback(code: string) {
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        code,
+        client_id: this.config.getOrThrow<string>('GOOGLE_CLIENT_ID'),
+        client_secret: this.config.getOrThrow<string>('GOOGLE_CLIENT_SECRET'),
+        redirect_uri: this.config.getOrThrow<string>('GOOGLE_REDIRECT_URI'),
+        grant_type: 'authorization_code',
+      }),
+    });
+
+    if (!tokenRes.ok) {
+      throw new UnauthorizedException('Google token exchange failed');
+    }
+
+    const tokenData = (await tokenRes.json()) as GoogleTokenResponse;
+
+    if (!tokenData.refresh_token) {
+      throw new UnauthorizedException('No refresh token returned from Google');
+    }
+
+    const profileRes = await fetch(
+      'https://openidconnect.googleapis.com/v1/userinfo',
+      {
+        headers: {
+          Authorization: `Bearer ${tokenData.access_token}`,
+        },
+      },
+    );
+
+    if (!profileRes.ok) {
+      throw new UnauthorizedException('Google profile fetch failed');
+    }
+
+    const profile = (await profileRes.json()) as GoogleUserInfo;
+
+    if (!profile.email || !profile.email_verified) {
+      throw new UnauthorizedException('Unverified Google account');
+    }
+
+    const key = Buffer.from(
+      this.config.getOrThrow<string>('ENCRYPTION_KEY'),
+      'hex',
+    );
+
+    const encryptedRefresh = encrypt(tokenData.refresh_token, key);
+
+    return this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.upsert({
+        where: { email: profile.email },
+        update: {},
+        create: { email: profile.email },
+      });
+
+      await tx.googleAccount.upsert({
+        where: {
+          userId_email: {
+            userId: user.id,
+            email: profile.email,
+          },
+        },
+        update: {
+          avatarUrl: profile.picture ?? null,
+          refreshTokenEncrypted: encryptedRefresh,
+        },
+        create: {
+          userId: user.id,
+          email: profile.email,
+          avatarUrl: profile.picture ?? null,
+          refreshTokenEncrypted: encryptedRefresh,
+        },
+      });
+
+      return user;
+    });
+  }
+
+  signJwt(userId: string): string {
+    return this.jwt.sign({
+      sub: userId,
+    });
+  }
+}
+
+--- END OF FILE: apps\api\src\auth\auth.service.ts ---
+
+
+--- START OF FILE: apps\api\src\auth\google.strategy.ts ---
+
+
+--- END OF FILE: apps\api\src\auth\google.strategy.ts ---
+
+
+--- START OF FILE: apps\api\src\auth\jwt.guard.ts ---
+
+import {
+  CanActivate,
+  ExecutionContext,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { FastifyRequest } from 'fastify';
+
+type JwtPayload = {
+  sub: string;
+  iat: number;
+  exp: number;
+};
+
+@Injectable()
+export class JwtGuard implements CanActivate {
+  constructor(private readonly jwt: JwtService) {}
+
+  async canActivate(context: ExecutionContext) {
+    const request = context
+      .switchToHttp()
+      .getRequest<FastifyRequest & { user?: JwtPayload }>();
+
+    const token = request.cookies?.access_token;
+
+    if (!token) {
+      throw new UnauthorizedException();
+    }
+
+    try {
+      const payload = await this.jwt.verifyAsync<JwtPayload>(token);
+
+      request.user = payload;
+
+      return true;
+    } catch {
+      throw new UnauthorizedException();
+    }
+  }
+}
+
+--- END OF FILE: apps\api\src\auth\jwt.guard.ts ---
+
+
+--- START OF FILE: apps\api\src\common\crypto\encryption.util.ts ---
+
+import { randomBytes, createCipheriv, createDecipheriv } from 'crypto';
+
+const ALGORITHM = 'aes-256-gcm';
+const IV_LENGTH = 12;
+
+export function encrypt(plaintext: string, key: Buffer): string {
+  const iv = randomBytes(IV_LENGTH);
+  const cipher = createCipheriv(ALGORITHM, key, iv);
+
+  const encrypted = Buffer.concat([
+    cipher.update(plaintext, 'utf8'),
+    cipher.final(),
+  ]);
+
+  const tag = cipher.getAuthTag();
+
+  return Buffer.concat([iv, tag, encrypted]).toString('base64');
+}
+
+export function decrypt(ciphertext: string, key: Buffer): string {
+  const data = Buffer.from(ciphertext, 'base64');
+
+  const iv = data.subarray(0, IV_LENGTH);
+  const tag = data.subarray(IV_LENGTH, IV_LENGTH + 16);
+  const text = data.subarray(IV_LENGTH + 16);
+
+  const decipher = createDecipheriv(ALGORITHM, key, iv);
+  decipher.setAuthTag(tag);
+
+  return decipher.update(text) + decipher.final('utf8');
+}
+
+--- END OF FILE: apps\api\src\common\crypto\encryption.util.ts ---
 
 
 --- START OF FILE: apps\api\src\common\filters\http-exception.filter.ts ---
@@ -479,14 +843,18 @@ export class AllExceptionsFilter implements ExceptionFilter {
       exception instanceof HttpException
         ? exception.getStatus()
         : HttpStatus.INTERNAL_SERVER_ERROR;
-
+    console.log('Exception caught by filter:', {
+      status,
+      exception,
+    });
+    const request = ctx.getRequest<{ url?: string }>();
     response.status(status).send({
       statusCode: status,
       timestamp: new Date().toISOString(),
-      path: ctx.getRequest().url,
+      path: request?.url ?? null,
       message:
         exception instanceof HttpException
-          ? exception.message
+          ? exception.getResponse()
           : 'Internal server error',
     });
   }
@@ -528,7 +896,9 @@ import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module.js';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter.js';
 import cookie from '@fastify/cookie';
-
+import { PrismaService } from './prisma/prisma.service.js';
+import helmet from '@fastify/helmet';
+import rateLimit from '@fastify/rate-limit';
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
@@ -548,18 +918,26 @@ async function bootstrap(): Promise<void> {
   );
 
   app.useGlobalFilters(new AllExceptionsFilter());
-  app.useLogger(app.get(Logger));
+  const logger = app.get(Logger);
+  app.useLogger(logger);
 
   const configService = app.get(ConfigService);
-
+  app.enableCors({
+    origin: configService.getOrThrow<string>('FRONTEND_URL'),
+    credentials: true,
+  });
   app.enableShutdownHooks();
   app.setGlobalPrefix('api');
+  await app.register(helmet);
 
+  await app.register(rateLimit, {
+    max: 100,
+    timeWindow: '1 minute',
+  });
   await app.listen({
     port: configService.getOrThrow<number>('PORT'),
     host: '0.0.0.0',
   });
-
   // ✅ Ensure Fastify is fully ready
   await app.getHttpAdapter().getInstance().ready();
 }
@@ -590,24 +968,66 @@ export class PrismaModule {}
 
 --- START OF FILE: apps\api\src\prisma\prisma.service.ts ---
 
-import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { Pool } from 'pg';
 
 @Injectable()
 export class PrismaService
   extends PrismaClient
   implements OnModuleInit, OnModuleDestroy
 {
-  async onModuleInit() {
+  private readonly pool: Pool;
+
+  constructor(private readonly config: ConfigService) {
+    const connectionString = config.getOrThrow<string>('DATABASE_URL');
+
+    const pool = new Pool({
+      connectionString,
+      max: 20,
+      idleTimeoutMillis: 30_000,
+      connectionTimeoutMillis: 5_000,
+    });
+
+    const adapter = new PrismaPg(pool);
+
+    super({
+      adapter,
+    });
+
+    this.pool = pool;
+  }
+
+  async onModuleInit(): Promise<void> {
     await this.$connect();
   }
 
-  async onModuleDestroy() {
+  async onModuleDestroy(): Promise<void> {
     await this.$disconnect();
+    await this.pool.end();
   }
 }
 
 --- END OF FILE: apps\api\src\prisma\prisma.service.ts ---
+
+
+--- START OF FILE: apps\api\src\types\fastify.d.ts ---
+
+import 'fastify';
+
+declare module 'fastify' {
+  interface FastifyRequest {
+    user?: {
+      sub: string;
+      iat: number;
+      exp: number;
+    };
+  }
+}
+
+--- END OF FILE: apps\api\src\types\fastify.d.ts ---
 
 
 --- START OF FILE: apps\api\tsconfig.eslint.json ---
@@ -632,9 +1052,10 @@ export class PrismaService
     "outDir": "./dist",
     "incremental": true,
     "experimentalDecorators": true,
-    "emitDecoratorMetadata": true
+    "emitDecoratorMetadata": true,
+    "types": ["node"]
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "prisma/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }
 
@@ -897,10 +1318,10 @@ button.secondary {
 
 --- START OF FILE: apps\web\app\page.tsx ---
 
-import Image, { type ImageProps } from 'next/image';
-import styles from './page.module.css';
+import Image, { type ImageProps } from "next/image";
+import styles from "./page.module.css";
 
-type Props = Omit<ImageProps, 'src'> & {
+type Props = Omit<ImageProps, "src"> & {
   srcLight: string;
   srcDark: string;
 };
@@ -1001,19 +1422,19 @@ export default function Home() {
 
 --- START OF FILE: apps\web\eslint.config.js ---
 
-import js from '@eslint/js';
-import tseslint from 'typescript-eslint';
-import next from '@next/eslint-plugin-next';
-import prettier from 'eslint-config-prettier';
+import js from "@eslint/js";
+import tseslint from "typescript-eslint";
+import next from "@next/eslint-plugin-next";
+import prettier from "eslint-config-prettier";
 
-import react from 'eslint-plugin-react';
-import reactHooks from 'eslint-plugin-react-hooks';
-import jsxA11y from 'eslint-plugin-jsx-a11y';
+import react from "eslint-plugin-react";
+import reactHooks from "eslint-plugin-react-hooks";
+import jsxA11y from "eslint-plugin-jsx-a11y";
 
 export default [
   // ✅ Global ignores
   {
-    ignores: ['.next/**', 'node_modules/**', 'dist/**', 'out/**', '.turbo/**'],
+    ignores: [".next/**", "node_modules/**", "dist/**", "out/**", ".turbo/**"],
   },
 
   // ✅ Base JS rules
@@ -1027,21 +1448,21 @@ export default [
 
   // ✅ Next + React full rules (type-aware)
   {
-    files: ['**/*.{ts,tsx}'],
+    files: ["**/*.{ts,tsx}"],
 
     languageOptions: {
       parser: tseslint.parser,
       parserOptions: {
-        project: './tsconfig.eslint.json',
+        project: "./tsconfig.eslint.json",
         tsconfigRootDir: import.meta.dirname,
       },
     },
 
     plugins: {
       react,
-      'react-hooks': reactHooks,
-      'jsx-a11y': jsxA11y,
-      '@next/next': next,
+      "react-hooks": reactHooks,
+      "jsx-a11y": jsxA11y,
+      "@next/next": next,
     },
 
     rules: {
@@ -1056,15 +1477,15 @@ export default [
 
       // ✅ Next.js rules
       ...next.configs.recommended.rules,
-      ...next.configs['core-web-vitals'].rules,
+      ...next.configs["core-web-vitals"].rules,
 
       // ✅ React 19 fix
-      'react/react-in-jsx-scope': 'off',
+      "react/react-in-jsx-scope": "off",
     },
 
     settings: {
       react: {
-        version: 'detect',
+        version: "detect",
       },
     },
   },
@@ -1108,7 +1529,7 @@ import "./.next/dev/types/routes.d.ts";
     "start": "next start",
     "lint": "eslint . --max-warnings 0",
     "check-types": "next typegen && tsc --noEmit",
-     "clean": "rimraf .next out"
+    "clean": "rimraf .next out"
   },
   "dependencies": {
     "next": "16.1.5",
@@ -1201,7 +1622,6 @@ import "./.next/dev/types/routes.d.ts";
     "check-types": "turbo run check-types",
     "format": "prettier --write .",
     "clean": "turbo run clean && rimraf node_modules .turbo pnpm-lock.yaml"
-
   },
   "devDependencies": {
     "prettier": "^3.7.4",
@@ -1231,7 +1651,7 @@ import "./.next/dev/types/routes.d.ts";
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-     "clean": "rimraf dist"
+    "clean": "rimraf dist"
   },
   "dependencies": {
     "zod": "^4.3.6"
@@ -1246,11 +1666,12 @@ import "./.next/dev/types/routes.d.ts";
 
 --- START OF FILE: packages\config\src\index.ts ---
 
-import { z } from 'zod';
+import { z } from "zod";
+
 export const baseEnvSchema = z.object({
   NODE_ENV: z
-    .enum(['development', 'production', 'test'])
-    .default('development'),
+    .enum(["development", "production", "test"])
+    .default("development"),
 
   PORT: z.coerce.number().default(3002),
 
@@ -1258,7 +1679,13 @@ export const baseEnvSchema = z.object({
 
   GOOGLE_CLIENT_ID: z.string(),
   GOOGLE_CLIENT_SECRET: z.string(),
-  JWT_SECRET: z.string(),
+  GOOGLE_REDIRECT_URI: z.string().url(),
+
+  FRONTEND_URL: z.string().url(),
+
+  JWT_SECRET: z.string().min(32),
+  JWT_EXPIRES_IN: z.string().default("1d"),
+  ENCRYPTION_KEY: z.string().length(64),
 });
 
 --- END OF FILE: packages\config\src\index.ts ---
@@ -1308,9 +1735,8 @@ export const baseEnvSchema = z.object({
     "./base.json": "./base.json"
   },
   "scripts": {
-  "clean": "rimraf dist"
-}
-
+    "clean": "rimraf dist"
+  }
 }
 
 --- END OF FILE: packages\tsconfig\package.json ---
@@ -1325,87 +1751,10 @@ packages:
 --- END OF FILE: pnpm-workspace.yaml ---
 
 
---- START OF FILE: print-structure.ps1 ---
+--- START OF FILE: src\auth\google.strategy.ts ---
 
-$outputFile = "project_source_dump.txt"
 
-# Directories to exclude (non-developer / generated / cache)
-$excludeDirs = @(
-    "node_modules",
-    ".turbo",
-    ".vite",
-    ".git",
-    ".pnpm",
-    "dist",
-    "build",
-    "coverage",
-    "out",
-    ".next",
-    ".output",
-    ".cache",
-    ".vercel",
-    ".idea",
-    ".vscode",
-    "prisma/migrations",
-    "tmp",
-    "temp",
-    "logs"
-)
-
-# File extensions to exclude (binary / generated / static assets)
-$excludeExtensions = @(
-    ".woff", ".woff2",
-    ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico",
-    ".mp4", ".webm", ".mov",
-    ".pdf",
-    ".log",
-    ".zip", ".tar", ".gz",
-    ".tsbuildinfo",".txt"
-)
-
-# Specific files to exclude
-$excludeFiles = @(
-    "project_source_dump.txt",
-    "package-lock.json",
-    "pnpm-lock.yaml",
-    "yarn.lock",
-    ".env",
-    ".env.local",
-    ".env.development",
-    ".env.production",
-    ".env.test",
-    "tsconfig.tsbuildinfo",
-    "README.md"
-)
-
-# Clear output file
-New-Item -ItemType File -Path $outputFile -Force | Out-Null
-
-# Get current directory dynamically
-$rootPath = (Get-Location).Path
-
-Get-ChildItem -Recurse -File | Sort-Object FullName | ForEach-Object {
-
-    $fullPath = $_.FullName
-    $relativePath = $fullPath.Replace("$rootPath\", "")
-
-    # Skip excluded directories
-    if ($excludeDirs | Where-Object { $relativePath -like "*$_*" }) { return }
-
-    # Skip excluded extensions
-    if ($excludeExtensions -contains $_.Extension) { return }
-
-    # Skip excluded files
-    if ($excludeFiles -contains $_.Name) { return }
-
-    Add-Content -Path $outputFile -Value "`n--- START OF FILE: $relativePath ---`n"
-    Get-Content -Path $fullPath | Add-Content -Path $outputFile
-    Add-Content -Path $outputFile -Value "`n--- END OF FILE: $relativePath ---`n"
-}
-
-Write-Host "✅ Developer source dump written to $outputFile" -ForegroundColor Green
-
---- END OF FILE: print-structure.ps1 ---
+--- END OF FILE: src\auth\google.strategy.ts ---
 
 
 --- START OF FILE: turbo.json ---

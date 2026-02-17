@@ -12,14 +12,17 @@ datasource db {
 // USERS
 ///////////////////////////////////////////////////////////////
 
+// prisma/schema.prisma
+
 model User {
-  id String @id @default(uuid()) @db.Uuid
+  id        String   @id @default(uuid()) @db.Uuid
   email     String   @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  primarySourceAccountId String?
-  destinationAccountId   String?
+  // Change these two lines to include @db.Uuid
+  primarySourceAccountId String? @db.Uuid
+  destinationAccountId   String? @db.Uuid
 
   primarySourceAccount GoogleAccount? @relation("PrimarySource", fields: [primarySourceAccountId], references: [id], onDelete: SetNull)
   destinationAccount   GoogleAccount? @relation("Destination", fields: [destinationAccountId], references: [id], onDelete: SetNull)
@@ -38,7 +41,7 @@ model User {
 
 model GoogleAccount {
   id String @id @default(uuid()) @db.Uuid
-  userId    String
+  userId String @db.Uuid
 
   email                 String
   avatarUrl             String?
@@ -67,10 +70,9 @@ model GoogleAccount {
 
 model TransferJob {
   id String @id @default(uuid()) @db.Uuid
-  userId    String
-
-  sourceAccountId      String
-  destinationAccountId String
+  userId               String @db.Uuid
+sourceAccountId      String @db.Uuid
+destinationAccountId String @db.Uuid
 
   destinationFolderId String
 
@@ -117,7 +119,7 @@ model TransferJob {
 
 model TransferItem {
   id String @id @default(uuid()) @db.Uuid
-  jobId String
+  jobId String @db.Uuid
 
   sourceFileId      String
   sourceParentId    String?
@@ -155,7 +157,7 @@ model TransferItem {
 
 model TransferEvent {
   id String @id @default(uuid()) @db.Uuid
-  jobId String
+  jobId String @db.Uuid
 
   type     String
   message  String?
@@ -175,7 +177,7 @@ model TransferEvent {
 
 model TransferLog {
   id String @id @default(uuid()) @db.Uuid
-  jobId String
+  jobId String @db.Uuid
 
   level   LogLevel
   action  String

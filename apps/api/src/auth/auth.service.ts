@@ -2,10 +2,12 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { JwtService } from '@nestjs/jwt';
+import { encrypt } from '../common/crypto/encryption.util.js';
 
 type GoogleTokenResponse = {
   access_token: string;
   id_token: string;
+  refresh_token?: string;
 };
 
 type GoogleUserInfo = {
@@ -58,6 +60,10 @@ export class AuthService {
 
     const tokenData = (await tokenRes.json()) as GoogleTokenResponse;
 
+    if (!tokenData.refresh_token) {
+      throw new UnauthorizedException('No refresh token returned from Google');
+    }
+
     const profileRes = await fetch(
       'https://openidconnect.googleapis.com/v1/userinfo',
       {
@@ -77,15 +83,41 @@ export class AuthService {
       throw new UnauthorizedException('Unverified Google account');
     }
 
-    const user = await this.prisma.user.upsert({
-      where: { email: profile.email },
-      update: {},
-      create: {
-        email: profile.email,
-      },
-    });
+    const key = Buffer.from(
+      this.config.getOrThrow<string>('ENCRYPTION_KEY'),
+      'hex',
+    );
 
-    return user;
+    const encryptedRefresh = encrypt(tokenData.refresh_token, key);
+
+    return this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.upsert({
+        where: { email: profile.email },
+        update: {},
+        create: { email: profile.email },
+      });
+
+      await tx.googleAccount.upsert({
+        where: {
+          userId_email: {
+            userId: user.id,
+            email: profile.email,
+          },
+        },
+        update: {
+          avatarUrl: profile.picture ?? null,
+          refreshTokenEncrypted: encryptedRefresh,
+        },
+        create: {
+          userId: user.id,
+          email: profile.email,
+          avatarUrl: profile.picture ?? null,
+          refreshTokenEncrypted: encryptedRefresh,
+        },
+      });
+
+      return user;
+    });
   }
 
   signJwt(userId: string): string {

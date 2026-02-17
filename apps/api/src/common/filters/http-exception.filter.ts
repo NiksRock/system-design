@@ -17,6 +17,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
       exception instanceof HttpException
         ? exception.getStatus()
         : HttpStatus.INTERNAL_SERVER_ERROR;
+    console.log('Exception caught by filter:', {
+      status,
+      exception,
+    });
     const request = ctx.getRequest<{ url?: string }>();
     response.status(status).send({
       statusCode: status,

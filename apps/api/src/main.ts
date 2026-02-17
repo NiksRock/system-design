@@ -1,17 +1,16 @@
+import cookie from '@fastify/cookie';
+import helmet from '@fastify/helmet';
+import rateLimit from '@fastify/rate-limit';
+import { ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import {
   FastifyAdapter,
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
-import { ConfigService } from '@nestjs/config';
 import { Logger } from 'nestjs-pino';
-import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module.js';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter.js';
-import cookie from '@fastify/cookie';
-import { PrismaService } from './prisma/prisma.service.js';
-import helmet from '@fastify/helmet';
-import rateLimit from '@fastify/rate-limit';
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
@@ -29,17 +28,16 @@ async function bootstrap(): Promise<void> {
       transform: true,
     }),
   );
-  app.enableCors({
-    origin:
-      process.env.NODE_ENV === 'production' ? ['https://yourdomain.com'] : true,
-    credentials: true,
-  });
+
   app.useGlobalFilters(new AllExceptionsFilter());
   const logger = app.get(Logger);
   app.useLogger(logger);
 
   const configService = app.get(ConfigService);
-
+  app.enableCors({
+    origin: configService.getOrThrow<string>('FRONTEND_URL'),
+    credentials: true,
+  });
   app.enableShutdownHooks();
   app.setGlobalPrefix('api');
   await app.register(helmet);
