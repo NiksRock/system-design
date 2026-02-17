@@ -6,8 +6,8 @@ import { LoggerModule } from 'nestjs-pino';
 import { AppController } from './app.controller.js';
 import { HealthController } from './health.controller.js';
 import { AppService } from './app.service.js';
-console.log('NODE_ENV =', JSON.stringify(process.env.NODE_ENV));
-
+import { AuthModule } from './auth/auth.module.js';
+import { PrismaModule } from './prisma/prisma.module.js';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -25,7 +25,7 @@ console.log('NODE_ENV =', JSON.stringify(process.env.NODE_ENV));
               }
             : undefined,
       },
-    }),
+    }),AuthModule,PrismaModule
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],
