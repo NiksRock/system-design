@@ -29,30 +29,29 @@ async function bootstrap(): Promise<void> {
       transform: true,
     }),
   );
-app.enableCors({
-  origin: process.env.NODE_ENV === 'production'
-    ? ['https://yourdomain.com']
-    : true,
-  credentials: true,
-});
+  app.enableCors({
+    origin:
+      process.env.NODE_ENV === 'production' ? ['https://yourdomain.com'] : true,
+    credentials: true,
+  });
   app.useGlobalFilters(new AllExceptionsFilter());
   const logger = app.get(Logger);
-app.useLogger(logger); 
+  app.useLogger(logger);
 
   const configService = app.get(ConfigService);
 
   app.enableShutdownHooks();
   app.setGlobalPrefix('api');
-await app.register(helmet);
+  await app.register(helmet);
 
-await app.register(rateLimit, {
-  max: 100,
-  timeWindow: '1 minute',
-});
+  await app.register(rateLimit, {
+    max: 100,
+    timeWindow: '1 minute',
+  });
   await app.listen({
     port: configService.getOrThrow<number>('PORT'),
     host: '0.0.0.0',
-  }); 
+  });
   // ✅ Ensure Fastify is fully ready
   await app.getHttpAdapter().getInstance().ready();
 }

@@ -12,7 +12,6 @@
     "check-types": "turbo run check-types",
     "format": "prettier --write .",
     "clean": "turbo run clean && rimraf node_modules .turbo pnpm-lock.yaml"
-
   },
   "devDependencies": {
     "prettier": "^3.7.4",

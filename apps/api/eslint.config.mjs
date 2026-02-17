@@ -28,7 +28,7 @@ export default tseslint.config(
 
     rules: {
       // 🔥 Useful backend rules
-     '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-explicit-any': 'error',
 
       '@typescript-eslint/no-floating-promises': 'warn',
       '@typescript-eslint/no-unused-vars': [

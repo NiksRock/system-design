@@ -17,15 +17,15 @@ export class AllExceptionsFilter implements ExceptionFilter {
       exception instanceof HttpException
         ? exception.getStatus()
         : HttpStatus.INTERNAL_SERVER_ERROR;
-const request = ctx.getRequest<{ url?: string }>();
-  response.status(status).send({
-  statusCode: status,
-  timestamp: new Date().toISOString(),
-  path: request?.url ?? null,
-  message:
-    exception instanceof HttpException
-      ? exception.getResponse()
-      : 'Internal server error',
-});
+    const request = ctx.getRequest<{ url?: string }>();
+    response.status(status).send({
+      statusCode: status,
+      timestamp: new Date().toISOString(),
+      path: request?.url ?? null,
+      message:
+        exception instanceof HttpException
+          ? exception.getResponse()
+          : 'Internal server error',
+    });
   }
 }

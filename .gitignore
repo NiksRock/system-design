@@ -75,5 +75,5 @@ tmp/
 temp/
 .cache/ 
 **/turbo-build.log
-project_source_dump.txt
-print-structure.ps1
+**/project_source_dump.txt
+**/print-structure.ps1

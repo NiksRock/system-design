@@ -31,7 +31,7 @@ $excludeExtensions = @(
     ".pdf",
     ".log",
     ".zip", ".tar", ".gz",
-    ".tsbuildinfo",".txt"
+    ".tsbuildinfo",".txt",'.ps1'
 )
 
 # Specific files to exclude

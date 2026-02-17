@@ -1,4 +1,5 @@
 import { z } from 'zod';
+
 export const baseEnvSchema = z.object({
   NODE_ENV: z
     .enum(['development', 'production', 'test'])
@@ -10,5 +11,8 @@ export const baseEnvSchema = z.object({
 
   GOOGLE_CLIENT_ID: z.string(),
   GOOGLE_CLIENT_SECRET: z.string(),
-  JWT_SECRET: z.string(),
+
+  JWT_SECRET: z.string().min(32),
+
+  JWT_EXPIRES_IN: z.string().default('1d'),
 });

@@ -7,7 +7,6 @@
     "./base.json": "./base.json"
   },
   "scripts": {
-  "clean": "rimraf dist"
-}
-
+    "clean": "rimraf dist"
+  }
 }

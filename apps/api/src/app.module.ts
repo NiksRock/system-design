@@ -25,7 +25,9 @@ import { PrismaModule } from './prisma/prisma.module.js';
               }
             : undefined,
       },
-    }),AuthModule,PrismaModule
+    }),
+    AuthModule,
+    PrismaModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],
