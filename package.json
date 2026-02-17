@@ -11,7 +11,8 @@
     "lint": "turbo run lint",
     "check-types": "turbo run check-types",
     "format": "prettier --write .",
-    "clean":  "pnpm -r --no-bail exec rimraf node_modules dist .next out coverage && rimraf node_modules .turbo dist .next out coverage && rimraf pnpm-lock.yaml"
+    "clean": "turbo run clean && rimraf node_modules .turbo pnpm-lock.yaml"
+
   },
   "devDependencies": {
     "prettier": "^3.7.4",

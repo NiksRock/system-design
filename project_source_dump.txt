@@ -1142,7 +1142,7 @@ import "./.next/dev/types/routes.d.ts";
     "lint": "turbo run lint",
     "check-types": "turbo run check-types",
     "format": "prettier --write .",
-    "clean": "rimraf node_modules .turbo pnpm-lock.yaml apps/*/node_modules packages/*/node_modules"
+    "clean":  "pnpm -r --no-bail exec rimraf node_modules dist .next out coverage && rimraf node_modules .turbo dist .next out coverage && rimraf pnpm-lock.yaml"
   },
   "devDependencies": {
     "prettier": "^3.7.4",

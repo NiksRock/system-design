@@ -1,11 +1,13 @@
 # =====================================
-# Dependencies (ALL apps/packages)
+# Dependencies
 # =====================================
 node_modules/
-**/node_modules/
-
 .pnpm-store/
-.pnpm-debug.log*
+
+# =====================================
+# Turbo Cache
+# =====================================
+.turbo/
 
 # =====================================
 # Build Outputs
@@ -14,29 +16,8 @@ dist/
 build/
 out/
 
-**/dist/
-**/build/
-**/out/
-
-# =====================================
 # Next.js
-# =====================================
 .next/
-**/.next/
-.next/cache/
-**/.next/cache/
-
-# =====================================
-# NestJS
-# =====================================
-apps/api/dist/
-apps/api/**/dist/
-
-# =====================================
-# Turbo
-# =====================================
-.turbo/
-**/.turbo/
 
 # =====================================
 # Prisma
@@ -44,27 +25,17 @@ apps/api/**/dist/
 prisma/migrations/
 apps/api/prisma/migrations/
 
-# Prisma generated client (if you ever output it manually)
-apps/api/prisma/generated/
-
 # =====================================
 # Environment Variables
 # =====================================
-.env
-.env.*
+.env*
 !.env.example
 
 # =====================================
 # Logs
 # =====================================
-logs/
-**/logs/
-
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
+logs/
 
 # =====================================
 # TypeScript Cache
@@ -72,10 +43,9 @@ pnpm-debug.log*
 *.tsbuildinfo
 
 # =====================================
-# Coverage / Testing
+# Coverage
 # =====================================
 coverage/
-**/coverage/
 
 # =====================================
 # OS Junk
@@ -84,7 +54,7 @@ coverage/
 Thumbs.db
 
 # =====================================
-# Editor / IDE Settings
+# Editor / IDE
 # =====================================
 .idea/
 .vscode/
@@ -99,8 +69,11 @@ Thumbs.db
 .firebase/
 
 # =====================================
-# Misc Temporary Stuff
+# Temp Stuff
 # =====================================
 tmp/
 temp/
-.cache/
+.cache/ 
+**/turbo-build.log
+project_source_dump.txt
+print-structure.ps1

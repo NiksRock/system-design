@@ -17,7 +17,8 @@
     "lint": "eslint . --max-warnings 0",
     "prisma:validate": "prisma validate",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev"
+    "prisma:migrate": "prisma migrate dev",
+      "clean": "rimraf dist"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

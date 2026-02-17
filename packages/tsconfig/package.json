@@ -5,5 +5,9 @@
   "type": "module",
   "exports": {
     "./base.json": "./base.json"
-  }
+  },
+  "scripts": {
+  "clean": "rimraf dist"
+}
+
 }
