@@ -18,6 +18,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       enableReadyCheck: true,
       lazyConnect: true,
     });
+    await this.client.connect();
   }
 
   async ping(): Promise<boolean> {

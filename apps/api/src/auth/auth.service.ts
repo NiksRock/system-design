@@ -1,4 +1,8 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { JwtService } from '@nestjs/jwt';
@@ -143,6 +147,44 @@ export class AuthService {
       });
 
       return user;
+    });
+  }
+  async setDestination(userId: string, accountId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      // 1️⃣ Verify account exists + belongs to user
+      const account = await tx.googleAccount.findUnique({
+        where: { id: accountId },
+        select: { id: true, userId: true },
+      });
+
+      if (!account || account.userId !== userId) {
+        throw new ForbiddenException('Invalid account');
+      }
+
+      // 2️⃣ Fetch user
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: { primarySourceAccountId: true },
+      });
+
+      if (!user) {
+        throw new ForbiddenException('User not found');
+      }
+
+      // 3️⃣ Cannot set primary source as destination
+      if (user.primarySourceAccountId === accountId) {
+        throw new ForbiddenException('Primary source cannot be destination');
+      }
+
+      // 4️⃣ Update destination (overwrites previous automatically)
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          destinationAccountId: accountId,
+        },
+      });
+
+      return { success: true };
     });
   }
 

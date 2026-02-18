@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Body,
   Controller,
   Get,
   Post,
@@ -13,6 +14,7 @@ import { randomUUID } from 'crypto';
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { AuthService } from './auth.service.js';
 import { JwtGuard } from './jwt.guard.js';
+import { SetDestinationDto } from './dto/set-destination.dto.js';
 
 @Controller('auth')
 export class AuthController {
@@ -24,10 +26,11 @@ export class AuthController {
   @Get('google')
   google(@Res({ passthrough: false }) res: FastifyReply) {
     const state = randomUUID();
+    const isProd = this.config.getOrThrow<string>('NODE_ENV') === 'production';
 
     res.setCookie('oauth_state', state, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isProd,
       sameSite: 'lax',
       path: '/',
       maxAge: 300,
@@ -37,7 +40,14 @@ export class AuthController {
 
     res.status(302).redirect(url);
   }
-
+  @UseGuards(JwtGuard)
+  @Post('set-destination')
+  async setDestination(
+    @Body() dto: SetDestinationDto,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.auth.setDestination(req.user!.sub, dto.accountId);
+  }
   @Get('google/callback')
   async callback(
     @Query('code') code: string,
