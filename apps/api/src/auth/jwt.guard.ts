@@ -15,7 +15,11 @@ type JwtPayload = {
 
 @Injectable()
 export class JwtGuard implements CanActivate {
-  constructor(private readonly jwt: JwtService) {}
+  constructor(private readonly jwt: JwtService) {
+    
+  }
+
+  
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context
@@ -51,7 +55,7 @@ export class JwtGuard implements CanActivate {
   private extractToken(request: FastifyRequest): string | undefined {
     // 1️⃣ Authorization header (Bearer)
     const authHeader = request.headers.authorization;
-
+console.log(request.cookies);
     if (authHeader?.startsWith('Bearer ')) {
       return authHeader.slice(7);
     }

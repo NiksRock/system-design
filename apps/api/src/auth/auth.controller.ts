@@ -29,21 +29,45 @@ export class AuthController {
   // GOOGLE LOGIN (Primary or Destination)
   // =====================================
   @Get('google')
-  google(
+  async google(
     @Query('intent') intent: OAuthIntent | undefined,
+    @Req() req: FastifyRequest,
     @Res({ passthrough: false }) res: FastifyReply,
   ) {
-    const isProd =
-      this.config.getOrThrow<string>('NODE_ENV') === 'production';
+    const isProd = this.config.getOrThrow<string>('NODE_ENV') === 'production';
 
-    const statePayload = {
+    const statePayload: {
+      csrf: string;
+      intent: OAuthIntent;
+      userId?: string;
+    } = {
       csrf: randomUUID(),
       intent: intent ?? 'primary',
     };
 
-    const state = Buffer.from(
-      JSON.stringify(statePayload),
-    ).toString('base64');
+    // 🔐 Require JWT only for destination
+    if (statePayload.intent === 'destination') {
+      const token =
+        req.cookies?.access_token ||
+        req.headers.authorization?.replace('Bearer ', '');
+
+      if (!token) {
+        throw new BadRequestException(
+          'Authentication required to add destination',
+        );
+      }
+
+      try {
+        const payload = await this.auth.verifyJwt(token);
+        statePayload.userId = payload.sub;
+      } catch {
+        throw new BadRequestException(
+          'Authentication required to add destination',
+        );
+      }
+    }
+
+    const state = Buffer.from(JSON.stringify(statePayload)).toString('base64');
 
     res.setCookie('oauth_state', state, {
       httpOnly: true,
@@ -81,17 +105,17 @@ export class AuthController {
 
     const decoded = JSON.parse(
       Buffer.from(state, 'base64').toString('utf8'),
-    ) as { csrf: string; intent: OAuthIntent };
+    ) as { csrf: string; intent: OAuthIntent; userId?: string };
 
     const user = await this.auth.handleGoogleCallback(
       code,
       decoded.intent,
+      decoded.userId,
     );
 
     const jwt = this.auth.signJwt(user.id);
 
-    const isProd =
-      this.config.getOrThrow<string>('NODE_ENV') === 'production';
+    const isProd = this.config.getOrThrow<string>('NODE_ENV') === 'production';
 
     res.setCookie('access_token', jwt, {
       httpOnly: true,
@@ -140,8 +164,7 @@ export class AuthController {
   // =====================================
   @Post('logout')
   logout(@Res({ passthrough: false }) res: FastifyReply) {
-    const isProd =
-      this.config.getOrThrow<string>('NODE_ENV') === 'production';
+    const isProd = this.config.getOrThrow<string>('NODE_ENV') === 'production';
 
     res.clearCookie('access_token', {
       path: '/',

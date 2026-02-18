@@ -48,29 +48,29 @@ export class AuthService {
     return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
   }
 
-  // =====================================
-  // HANDLE GOOGLE CALLBACK
-  // =====================================
+  async verifyJwt(token: string): Promise<{ sub: string }> {
+    try {
+      return await this.jwt.verifyAsync(token);
+    } catch {
+      throw new UnauthorizedException('Invalid or expired token');
+    }
+  }
   async handleGoogleCallback(
     code: string,
     intent: OAuthIntent,
+    linkingUserId?: string,
   ) {
-    const tokenRes = await fetch(
-      'https://oauth2.googleapis.com/token',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          code,
-          client_id: this.config.getOrThrow<string>('GOOGLE_CLIENT_ID'),
-          client_secret:
-            this.config.getOrThrow<string>('GOOGLE_CLIENT_SECRET'),
-          redirect_uri:
-            this.config.getOrThrow<string>('GOOGLE_REDIRECT_URI'),
-          grant_type: 'authorization_code',
-        }),
-      },
-    );
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code,
+        client_id: this.config.getOrThrow<string>('GOOGLE_CLIENT_ID'),
+        client_secret: this.config.getOrThrow<string>('GOOGLE_CLIENT_SECRET'),
+        redirect_uri: this.config.getOrThrow<string>('GOOGLE_REDIRECT_URI'),
+        grant_type: 'authorization_code',
+      }),
+    });
 
     if (!tokenRes.ok) {
       throw new UnauthorizedException('Google token exchange failed');
@@ -103,12 +103,32 @@ export class AuthService {
     );
 
     return this.prisma.$transaction(async (tx) => {
-      const user = await tx.user.upsert({
-        where: { email: profile.email },
-        update: {},
-        create: { email: profile.email },
-      });
+      let user;
 
+      if (intent === 'primary') {
+        user = await tx.user.upsert({
+          where: { email: profile.email },
+          update: {},
+          create: { email: profile.email },
+        });
+      } else {
+        // 🔐 DESTINATION FLOW
+        if (!linkingUserId) {
+          throw new ForbiddenException(
+            'Destination linking requires active session',
+          );
+        }
+
+        user = await tx.user.findUnique({
+          where: { id: linkingUserId },
+        });
+
+        if (!user) {
+          throw new ForbiddenException('User not found');
+        }
+      }
+
+      // Upsert GoogleAccount under same user
       const existingAccount = await tx.googleAccount.findUnique({
         where: {
           userId_email: {
@@ -128,7 +148,6 @@ export class AuthService {
             'No refresh token returned and account does not exist',
           );
         }
-
         encryptedRefresh = existingAccount.refreshTokenEncrypted;
       }
 
@@ -151,9 +170,6 @@ export class AuthService {
         },
       });
 
-      // =====================================
-      // INTENT HANDLING
-      // =====================================
       if (intent === 'primary') {
         await tx.user.update({
           where: { id: user.id },
@@ -164,24 +180,8 @@ export class AuthService {
       }
 
       if (intent === 'destination') {
-        const existingUser = await tx.user.findUnique({
-          where: { id: user.id },
-          select: { primarySourceAccountId: true },
-        });
-
-        if (!existingUser?.primarySourceAccountId) {
-          throw new ForbiddenException(
-            'Primary account must be configured first',
-          );
-        }
-
-        if (
-          existingUser.primarySourceAccountId ===
-          googleAccount.id
-        ) {
-          throw new ForbiddenException(
-            'Primary account cannot be destination',
-          );
+        if (user.primarySourceAccountId === googleAccount.id) {
+          throw new ForbiddenException('Primary account cannot be destination');
         }
 
         await tx.user.update({
@@ -220,9 +220,7 @@ export class AuthService {
       }
 
       if (user.primarySourceAccountId === accountId) {
-        throw new ForbiddenException(
-          'Primary source cannot be destination',
-        );
+        throw new ForbiddenException('Primary source cannot be destination');
       }
 
       await tx.user.update({
