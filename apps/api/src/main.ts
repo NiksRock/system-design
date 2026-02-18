@@ -11,16 +11,26 @@ import {
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module.js';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter.js';
+
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     new FastifyAdapter(),
     { bufferLogs: true },
   );
+
+  const configService = app.get(ConfigService);
+  const logger = app.get(Logger);
+
+  // Bind structured logger first
+  app.useLogger(logger);
+
+  // Secure cookie secret
   await app.register(cookie, {
-    secret: process.env.JWT_SECRET,
+    secret: configService.getOrThrow<string>('JWT_SECRET'),
   });
 
+  // Validation
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -29,32 +39,37 @@ async function bootstrap(): Promise<void> {
     }),
   );
 
-  app.useGlobalFilters(new AllExceptionsFilter());
-  const logger = app.get(Logger);
-  app.useLogger(logger);
+  // Global exception filter (structured logging)
+  app.useGlobalFilters(new AllExceptionsFilter(logger));
 
-  const configService = app.get(ConfigService);
+  // CORS
   app.enableCors({
     origin: configService.getOrThrow<string>('FRONTEND_URL'),
     credentials: true,
   });
+
   app.enableShutdownHooks();
   app.setGlobalPrefix('api');
+
+  // Security headers
   await app.register(helmet);
 
+  // Rate limiting
   await app.register(rateLimit, {
     max: 100,
     timeWindow: '1 minute',
+    allowList: ['127.0.0.1'],
   });
+
   await app.listen({
     port: configService.getOrThrow<number>('PORT'),
     host: '0.0.0.0',
   });
-  // ✅ Ensure Fastify is fully ready
+
+  // Ensure Fastify ready
   await app.getHttpAdapter().getInstance().ready();
 }
 
-// ✅ Proper top-level promise handling (fixes no-floating-promises)
 bootstrap().catch((err) => {
   console.error('❌ Application failed to start', err);
   process.exit(1);

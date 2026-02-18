@@ -11,7 +11,7 @@ export class PrismaService
 {
   private readonly pool: Pool;
 
-  constructor(private readonly config: ConfigService) {
+  constructor(config: ConfigService) {
     const connectionString = config.getOrThrow<string>('DATABASE_URL');
 
     const pool = new Pool({
@@ -23,19 +23,20 @@ export class PrismaService
 
     const adapter = new PrismaPg(pool);
 
+    // 🔥 CRITICAL FIX: pass adapter AND explicitly preserve types
     super({
       adapter,
-    });
+    } as ConstructorParameters<typeof PrismaClient>[0]);
 
     this.pool = pool;
   }
 
   async onModuleInit(): Promise<void> {
-    await this.$connect();
+    await super.$connect();
   }
 
   async onModuleDestroy(): Promise<void> {
-    await this.$disconnect();
+    await super.$disconnect();
     await this.pool.end();
   }
 }

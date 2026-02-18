@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  OnModuleInit,
-  OnModuleDestroy,
-} from '@nestjs/common';
+import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createRequire } from 'node:module';
 import type { Redis as RedisClient } from 'ioredis';
@@ -11,22 +7,17 @@ const require = createRequire(import.meta.url);
 const Redis = require('ioredis');
 
 @Injectable()
-export class RedisService
-  implements OnModuleInit, OnModuleDestroy
-{
+export class RedisService implements OnModuleInit, OnModuleDestroy {
   private client!: RedisClient;
 
   constructor(private readonly config: ConfigService) {}
 
   async onModuleInit(): Promise<void> {
-    this.client = new Redis(
-      this.config.getOrThrow<string>('REDIS_URL'),
-      {
-        maxRetriesPerRequest: 1,
-        enableReadyCheck: true,
-        lazyConnect: false,
-      },
-    );
+    this.client = new Redis(this.config.getOrThrow<string>('REDIS_URL'), {
+      maxRetriesPerRequest: 1,
+      enableReadyCheck: true,
+      lazyConnect: true,
+    });
   }
 
   async ping(): Promise<boolean> {

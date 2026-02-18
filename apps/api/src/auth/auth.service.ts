@@ -40,19 +40,20 @@ export class AuthService {
   }
 
   async handleGoogleCallback(code: string) {
-    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
+    const tokenRes = await this.fetchWithTimeout(
+      'https://oauth2.googleapis.com/token',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          code,
+          client_id: this.config.getOrThrow<string>('GOOGLE_CLIENT_ID'),
+          client_secret: this.config.getOrThrow<string>('GOOGLE_CLIENT_SECRET'),
+          redirect_uri: this.config.getOrThrow<string>('GOOGLE_REDIRECT_URI'),
+          grant_type: 'authorization_code',
+        }),
       },
-      body: new URLSearchParams({
-        code,
-        client_id: this.config.getOrThrow<string>('GOOGLE_CLIENT_ID'),
-        client_secret: this.config.getOrThrow<string>('GOOGLE_CLIENT_SECRET'),
-        redirect_uri: this.config.getOrThrow<string>('GOOGLE_REDIRECT_URI'),
-        grant_type: 'authorization_code',
-      }),
-    });
+    );
 
     if (!tokenRes.ok) {
       throw new UnauthorizedException('Google token exchange failed');
@@ -60,11 +61,7 @@ export class AuthService {
 
     const tokenData = (await tokenRes.json()) as GoogleTokenResponse;
 
-    if (!tokenData.refresh_token) {
-      throw new UnauthorizedException('No refresh token returned from Google');
-    }
-
-    const profileRes = await fetch(
+    const profileRes = await this.fetchWithTimeout(
       'https://openidconnect.googleapis.com/v1/userinfo',
       {
         headers: {
@@ -83,12 +80,10 @@ export class AuthService {
       throw new UnauthorizedException('Unverified Google account');
     }
 
-    const key = Buffer.from(
+    const encryptionKey = Buffer.from(
       this.config.getOrThrow<string>('ENCRYPTION_KEY'),
       'hex',
     );
-
-    const encryptedRefresh = encrypt(tokenData.refresh_token, key);
 
     return this.prisma.$transaction(async (tx) => {
       const user = await tx.user.upsert({
@@ -97,7 +92,30 @@ export class AuthService {
         create: { email: profile.email },
       });
 
-      await tx.googleAccount.upsert({
+      const existingAccount = await tx.googleAccount.findUnique({
+        where: {
+          userId_email: {
+            userId: user.id,
+            email: profile.email,
+          },
+        },
+      });
+
+      let encryptedRefresh: string;
+
+      if (tokenData.refresh_token) {
+        encryptedRefresh = encrypt(tokenData.refresh_token, encryptionKey);
+      } else {
+        if (!existingAccount) {
+          throw new UnauthorizedException(
+            'No refresh token returned and account does not exist',
+          );
+        }
+
+        encryptedRefresh = existingAccount.refreshTokenEncrypted;
+      }
+
+      const googleAccount = await tx.googleAccount.upsert({
         where: {
           userId_email: {
             userId: user.id,
@@ -116,8 +134,34 @@ export class AuthService {
         },
       });
 
+      // ✅ PRIMARY SOURCE ENFORCEMENT (TC-A6)
+      await tx.user.update({
+        where: { id: user.id },
+        data: {
+          primarySourceAccountId: googleAccount.id,
+        },
+      });
+
       return user;
     });
+  }
+
+  private async fetchWithTimeout(
+    url: string,
+    options: RequestInit,
+    timeoutMs = 5000,
+  ): Promise<Response> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      return await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   signJwt(userId: string): string {

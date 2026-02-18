@@ -28,7 +28,8 @@ import { RedisModule } from './redis/redis.module.js';
       },
     }),
     AuthModule,
-    PrismaModule,RedisModule
+    PrismaModule,
+    RedisModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],

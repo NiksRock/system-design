@@ -1,9 +1,4 @@
-import {
-  Controller,
-  Get,
-  HttpException,
-  HttpStatus,
-} from '@nestjs/common';
+import { Controller, Get, HttpException, HttpStatus } from '@nestjs/common';
 import { PrismaService } from './prisma/prisma.service.js';
 import { RedisService } from './redis/redis.service.js';
 import { Logger } from 'nestjs-pino';
@@ -27,14 +22,10 @@ export class HealthController {
     let redisOk = false;
 
     try {
-      // DB check (fast + lightweight)
-      await this.prisma.$queryRawUnsafe('SELECT 1');
+      await this.prisma.$executeRaw`SELECT 1`;
       dbOk = true;
     } catch (err) {
-      this.logger.error(
-        { err },
-        'Health check failed: PostgreSQL unreachable',
-      );
+      this.logger.error({ err }, 'Health check failed: PostgreSQL unreachable');
     }
 
     try {
@@ -43,10 +34,7 @@ export class HealthController {
         throw new Error('Redis ping failed');
       }
     } catch (err) {
-      this.logger.error(
-        { err },
-        'Health check failed: Redis unreachable',
-      );
+      this.logger.error({ err }, 'Health check failed: Redis unreachable');
     }
 
     if (!dbOk || !redisOk) {
