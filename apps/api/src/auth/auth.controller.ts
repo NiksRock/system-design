@@ -16,6 +16,8 @@ import { AuthService } from './auth.service.js';
 import { JwtGuard } from './jwt.guard.js';
 import { SetDestinationDto } from './dto/set-destination.dto.js';
 
+type OAuthIntent = 'primary' | 'destination';
+
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -23,10 +25,25 @@ export class AuthController {
     private readonly config: ConfigService,
   ) {}
 
+  // =====================================
+  // GOOGLE LOGIN (Primary or Destination)
+  // =====================================
   @Get('google')
-  google(@Res({ passthrough: false }) res: FastifyReply) {
-    const state = randomUUID();
-    const isProd = this.config.getOrThrow<string>('NODE_ENV') === 'production';
+  google(
+    @Query('intent') intent: OAuthIntent | undefined,
+    @Res({ passthrough: false }) res: FastifyReply,
+  ) {
+    const isProd =
+      this.config.getOrThrow<string>('NODE_ENV') === 'production';
+
+    const statePayload = {
+      csrf: randomUUID(),
+      intent: intent ?? 'primary',
+    };
+
+    const state = Buffer.from(
+      JSON.stringify(statePayload),
+    ).toString('base64');
 
     res.setCookie('oauth_state', state, {
       httpOnly: true,
@@ -38,16 +55,12 @@ export class AuthController {
 
     const url = this.auth.buildGoogleAuthUrl(state);
 
-    res.status(302).redirect(url);
+    return res.status(302).redirect(url);
   }
-  @UseGuards(JwtGuard)
-  @Post('set-destination')
-  async setDestination(
-    @Body() dto: SetDestinationDto,
-    @Req() req: FastifyRequest,
-  ) {
-    return this.auth.setDestination(req.user!.sub, dto.accountId);
-  }
+
+  // =====================================
+  // GOOGLE CALLBACK
+  // =====================================
   @Get('google/callback')
   async callback(
     @Query('code') code: string,
@@ -66,11 +79,19 @@ export class AuthController {
       throw new BadRequestException('Missing code');
     }
 
-    const user = await this.auth.handleGoogleCallback(code);
+    const decoded = JSON.parse(
+      Buffer.from(state, 'base64').toString('utf8'),
+    ) as { csrf: string; intent: OAuthIntent };
+
+    const user = await this.auth.handleGoogleCallback(
+      code,
+      decoded.intent,
+    );
 
     const jwt = this.auth.signJwt(user.id);
 
-    const isProd = process.env.NODE_ENV === 'production';
+    const isProd =
+      this.config.getOrThrow<string>('NODE_ENV') === 'production';
 
     res.setCookie('access_token', jwt, {
       httpOnly: true,
@@ -91,6 +112,21 @@ export class AuthController {
       .redirect(this.config.getOrThrow<string>('FRONTEND_URL'));
   }
 
+  // =====================================
+  // MANUAL DESTINATION SET (existing flow)
+  // =====================================
+  @UseGuards(JwtGuard)
+  @Post('set-destination')
+  async setDestination(
+    @Body() dto: SetDestinationDto,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.auth.setDestination(req.user!.sub, dto.accountId);
+  }
+
+  // =====================================
+  // CURRENT USER
+  // =====================================
   @UseGuards(JwtGuard)
   @Get('me')
   me(@Req() req: FastifyRequest) {
@@ -99,9 +135,13 @@ export class AuthController {
     };
   }
 
+  // =====================================
+  // LOGOUT
+  // =====================================
   @Post('logout')
   logout(@Res({ passthrough: false }) res: FastifyReply) {
-    const isProd = process.env.NODE_ENV === 'production';
+    const isProd =
+      this.config.getOrThrow<string>('NODE_ENV') === 'production';
 
     res.clearCookie('access_token', {
       path: '/',

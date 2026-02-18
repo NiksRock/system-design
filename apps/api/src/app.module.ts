@@ -10,6 +10,7 @@ import { AuthModule } from './auth/auth.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { RedisModule } from './redis/redis.module.js';
 import { AccountsModule } from './accounts/accounts.module.js';
+import { TransfersModule } from './transfers/transfers.module.js';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -32,6 +33,7 @@ import { AccountsModule } from './accounts/accounts.module.js';
     PrismaModule,
     RedisModule,
     AccountsModule,
+    TransfersModule
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],

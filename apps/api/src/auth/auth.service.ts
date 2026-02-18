@@ -8,6 +8,8 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { JwtService } from '@nestjs/jwt';
 import { encrypt } from '../common/crypto/encryption.util.js';
 
+type OAuthIntent = 'primary' | 'destination';
+
 type GoogleTokenResponse = {
   access_token: string;
   id_token: string;
@@ -29,6 +31,9 @@ export class AuthService {
     private readonly jwt: JwtService,
   ) {}
 
+  // =====================================
+  // BUILD GOOGLE AUTH URL
+  // =====================================
   buildGoogleAuthUrl(state: string): string {
     const params = new URLSearchParams({
       client_id: this.config.getOrThrow<string>('GOOGLE_CLIENT_ID'),
@@ -43,8 +48,14 @@ export class AuthService {
     return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
   }
 
-  async handleGoogleCallback(code: string) {
-    const tokenRes = await this.fetchWithTimeout(
+  // =====================================
+  // HANDLE GOOGLE CALLBACK
+  // =====================================
+  async handleGoogleCallback(
+    code: string,
+    intent: OAuthIntent,
+  ) {
+    const tokenRes = await fetch(
       'https://oauth2.googleapis.com/token',
       {
         method: 'POST',
@@ -52,8 +63,10 @@ export class AuthService {
         body: new URLSearchParams({
           code,
           client_id: this.config.getOrThrow<string>('GOOGLE_CLIENT_ID'),
-          client_secret: this.config.getOrThrow<string>('GOOGLE_CLIENT_SECRET'),
-          redirect_uri: this.config.getOrThrow<string>('GOOGLE_REDIRECT_URI'),
+          client_secret:
+            this.config.getOrThrow<string>('GOOGLE_CLIENT_SECRET'),
+          redirect_uri:
+            this.config.getOrThrow<string>('GOOGLE_REDIRECT_URI'),
           grant_type: 'authorization_code',
         }),
       },
@@ -65,7 +78,7 @@ export class AuthService {
 
     const tokenData = (await tokenRes.json()) as GoogleTokenResponse;
 
-    const profileRes = await this.fetchWithTimeout(
+    const profileRes = await fetch(
       'https://openidconnect.googleapis.com/v1/userinfo',
       {
         headers: {
@@ -138,20 +151,56 @@ export class AuthService {
         },
       });
 
-      // ✅ PRIMARY SOURCE ENFORCEMENT (TC-A6)
-      await tx.user.update({
-        where: { id: user.id },
-        data: {
-          primarySourceAccountId: googleAccount.id,
-        },
-      });
+      // =====================================
+      // INTENT HANDLING
+      // =====================================
+      if (intent === 'primary') {
+        await tx.user.update({
+          where: { id: user.id },
+          data: {
+            primarySourceAccountId: googleAccount.id,
+          },
+        });
+      }
+
+      if (intent === 'destination') {
+        const existingUser = await tx.user.findUnique({
+          where: { id: user.id },
+          select: { primarySourceAccountId: true },
+        });
+
+        if (!existingUser?.primarySourceAccountId) {
+          throw new ForbiddenException(
+            'Primary account must be configured first',
+          );
+        }
+
+        if (
+          existingUser.primarySourceAccountId ===
+          googleAccount.id
+        ) {
+          throw new ForbiddenException(
+            'Primary account cannot be destination',
+          );
+        }
+
+        await tx.user.update({
+          where: { id: user.id },
+          data: {
+            destinationAccountId: googleAccount.id,
+          },
+        });
+      }
 
       return user;
     });
   }
+
+  // =====================================
+  // MANUAL DESTINATION SET
+  // =====================================
   async setDestination(userId: string, accountId: string) {
     return this.prisma.$transaction(async (tx) => {
-      // 1️⃣ Verify account exists + belongs to user
       const account = await tx.googleAccount.findUnique({
         where: { id: accountId },
         select: { id: true, userId: true },
@@ -161,7 +210,6 @@ export class AuthService {
         throw new ForbiddenException('Invalid account');
       }
 
-      // 2️⃣ Fetch user
       const user = await tx.user.findUnique({
         where: { id: userId },
         select: { primarySourceAccountId: true },
@@ -171,12 +219,12 @@ export class AuthService {
         throw new ForbiddenException('User not found');
       }
 
-      // 3️⃣ Cannot set primary source as destination
       if (user.primarySourceAccountId === accountId) {
-        throw new ForbiddenException('Primary source cannot be destination');
+        throw new ForbiddenException(
+          'Primary source cannot be destination',
+        );
       }
 
-      // 4️⃣ Update destination (overwrites previous automatically)
       await tx.user.update({
         where: { id: userId },
         data: {
@@ -188,24 +236,9 @@ export class AuthService {
     });
   }
 
-  private async fetchWithTimeout(
-    url: string,
-    options: RequestInit,
-    timeoutMs = 5000,
-  ): Promise<Response> {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-    try {
-      return await fetch(url, {
-        ...options,
-        signal: controller.signal,
-      });
-    } finally {
-      clearTimeout(timeout);
-    }
-  }
-
+  // =====================================
+  // JWT SIGN
+  // =====================================
   signJwt(userId: string): string {
     return this.jwt.sign({
       sub: userId,
