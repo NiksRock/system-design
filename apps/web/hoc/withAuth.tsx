@@ -5,12 +5,8 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import type { ComponentType, JSX } from "react";
 
-export function withAuth<T extends object>(
-  Component: ComponentType<T>,
-) {
-  return function ProtectedComponent(
-    props: T,
-  ): JSX.Element | null {
+export function withAuth<T extends object>(Component: ComponentType<T>) {
+  return function ProtectedComponent(props: T): JSX.Element | null {
     const { data, isLoading, isError } = useMe();
     const router = useRouter();
 

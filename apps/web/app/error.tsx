@@ -14,13 +14,9 @@ export default function GlobalError({
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="space-y-4 text-center">
-        <h2 className="text-xl font-semibold">
-          Something went wrong
-        </h2>
+        <h2 className="text-xl font-semibold">Something went wrong</h2>
 
-        <Button onClick={() => reset()}>
-          Try again
-        </Button>
+        <Button onClick={() => reset()}>Try again</Button>
       </div>
     </div>
   );

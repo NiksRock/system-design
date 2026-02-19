@@ -1,5 +1,4 @@
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3002/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3002/api";
 
 export type NormalizedApiError = {
   status: number;
@@ -29,10 +28,7 @@ function hasJsonBody(body: unknown): boolean {
   return typeof body === "object";
 }
 
-function normalizeError(
-  status: number,
-  raw: unknown,
-): NormalizedApiError {
+function normalizeError(status: number, raw: unknown): NormalizedApiError {
   if (
     raw &&
     typeof raw === "object" &&
@@ -49,9 +45,7 @@ function normalizeError(
     return {
       status: r.statusCode ?? status,
       message:
-        typeof r.message === "string"
-          ? r.message
-          : JSON.stringify(r.message),
+        typeof r.message === "string" ? r.message : JSON.stringify(r.message),
       path: r.path ?? null,
       timestamp: r.timestamp,
       details: raw,
@@ -73,19 +67,14 @@ export async function clientFetch<T>(
 
   const shouldStringify = hasJsonBody(body);
 
-  const finalBody =
-    shouldStringify && body
-      ? JSON.stringify(body)
-      : body;
+  const finalBody = shouldStringify && body ? JSON.stringify(body) : body;
 
   const res = await fetch(`${API_URL}${path}`, {
     ...options,
     credentials: "include",
     body: finalBody,
     headers: {
-      ...(shouldStringify
-        ? { "Content-Type": "application/json" }
-        : {}),
+      ...(shouldStringify ? { "Content-Type": "application/json" } : {}),
       ...options.headers,
     },
   });
@@ -102,14 +91,10 @@ export async function clientFetch<T>(
     res.status === 204 ||
     !res.headers.get("content-type")?.includes("application/json");
 
-  const data = isEmpty
-    ? null
-    : await res.json().catch(() => null);
+  const data = isEmpty ? null : await res.json().catch(() => null);
 
   if (!res.ok) {
-    throw new ApiError(
-      normalizeError(res.status, data),
-    );
+    throw new ApiError(normalizeError(res.status, data));
   }
 
   return data as T;

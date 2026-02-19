@@ -1,11 +1,10 @@
 import { cookies } from "next/headers";
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3002/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3002/api";
 
 export async function serverFetch<T>(
   path: string,
-  options?: RequestInit
+  options?: RequestInit,
 ): Promise<T> {
   const cookieStore = await cookies();
 
@@ -22,10 +21,9 @@ export async function serverFetch<T>(
 
   if (!res.ok) {
     throw new Error(
-      `Server request failed: ${res.status} ${JSON.stringify(data)}`
+      `Server request failed: ${res.status} ${JSON.stringify(data)}`,
     );
   }
 
   return data as T;
 }
-

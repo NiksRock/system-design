@@ -32,6 +32,8 @@
     "@eslint/js": "^9.39.2",
     "@next/eslint-plugin-next": "^16.1.6",
     "@repo/tsconfig": "workspace:*",
+    "@tailwindcss/container-queries": "^0.1.1",
+    "@tailwindcss/forms": "^0.5.11",
     "@tailwindcss/postcss": "^4.2.0",
     "@types/node": "^22.15.3",
     "@types/react": "19.2.2",

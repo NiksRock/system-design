@@ -58,9 +58,7 @@ function TransferOptions() {
   return (
     <div className="flex items-center justify-center">
       <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border shadow-sm w-64">
-        <h4 className="text-xs font-bold uppercase mb-3">
-          Transfer Options
-        </h4>
+        <h4 className="text-xs font-bold uppercase mb-3">Transfer Options</h4>
 
         <div className="space-y-3 text-sm">
           <label className="flex gap-2">

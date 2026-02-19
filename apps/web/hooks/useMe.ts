@@ -19,4 +19,3 @@ export function useMe() {
     staleTime: Infinity,
   });
 }
-
