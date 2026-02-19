@@ -1,18 +1,24 @@
-import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
+import { queryKeys } from "@/lib/query-keys";
+import { createQueryClient } from "@/lib/react-query";
+import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
+import { redirect } from "next/navigation";
+import DashboardClient from "./dashboard.client";
 
 export default async function DashboardPage() {
-  const data = await getCurrentUser().catch(() => null);
+const queryClient=createQueryClient()
 
-  if (!data) {
-    redirect("/login");
-  }
+  const user = await getCurrentUser().catch(() => null);
+
+  if (!user) redirect("/login");
+
+  queryClient.setQueryData(queryKeys.me, user);
+
+  const dehydratedState = dehydrate(queryClient);
 
   return (
-    <main className="p-8">
-      <h1 className="text-2xl font-bold">
-        Welcome {data.user.sub}
-      </h1>
-    </main>
+    <HydrationBoundary state={dehydratedState}>
+      <DashboardClient />
+    </HydrationBoundary>
   );
 }

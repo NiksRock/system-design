@@ -72,7 +72,7 @@ export class AuthController {
     res.setCookie('oauth_state', state, {
       httpOnly: true,
       secure: isProd,
-      sameSite: 'lax',
+      sameSite: isProd ? 'strict' : 'lax',
       path: '/',
       maxAge: 300,
     });
@@ -132,7 +132,7 @@ export class AuthController {
     res.setCookie('access_token', jwt, {
       httpOnly: true,
       secure: isProd,
-      sameSite: 'lax',
+      sameSite: isProd ? 'strict' : 'lax',
       path: '/',
       maxAge: 60 * 60 * 24,
     });
@@ -140,7 +140,7 @@ export class AuthController {
     res.clearCookie('oauth_state', {
       path: '/',
       secure: isProd,
-      sameSite: 'lax',
+      sameSite: isProd ? 'strict' : 'lax',
     });
 
     return res
@@ -182,7 +182,7 @@ export class AuthController {
       path: '/',
       httpOnly: true,
       secure: isProd,
-      sameSite: 'lax',
+      sameSite: isProd ? 'strict' : 'lax',
     });
 
     return res.status(200).send({ success: true });
