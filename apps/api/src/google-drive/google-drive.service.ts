@@ -178,7 +178,19 @@ export class GoogleDriveService {
         return undefined as T;
       }
 
-      return (await response.json()) as T;
+      const contentType = response.headers.get('content-type');
+
+      if (!contentType?.includes('application/json')) {
+        throw new GoogleRetryableError('Unexpected response type');
+      }
+
+      const text = await response.text();
+
+      if (!text) {
+        return undefined as T;
+      }
+
+      return JSON.parse(text) as T;
     } catch {
       if (attempt < 3) {
         const jitter = Math.random() * 100;
@@ -266,7 +278,9 @@ export class GoogleDriveService {
       this.config.getOrThrow<string>('ENCRYPTION_KEY'),
       'hex',
     );
-
+    if (encryptionKey.length !== 32) {
+      throw new Error('Invalid ENCRYPTION_KEY length');
+    }
     const refreshToken = decrypt(refreshTokenEncrypted, encryptionKey);
 
     const response = await fetch('https://oauth2.googleapis.com/token', {

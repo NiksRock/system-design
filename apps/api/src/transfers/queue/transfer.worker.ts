@@ -26,6 +26,13 @@ export class TransferWorker implements OnModuleInit, OnModuleDestroy {
         concurrency: 3,
       },
     );
+    this.worker.on('error', (err) => {
+      console.error('Transfer worker error', err);
+    });
+
+    this.worker.on('failed', (job, err) => {
+      console.error(`Job ${job?.id} failed`, err);
+    });
   }
 
   async onModuleDestroy(): Promise<void> {

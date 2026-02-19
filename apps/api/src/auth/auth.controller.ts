@@ -107,6 +107,17 @@ export class AuthController {
 
     try {
       decoded = JSON.parse(Buffer.from(state, 'base64').toString('utf8'));
+      if (state !== cookieState) {
+        throw new BadRequestException('Invalid OAuth state');
+      }
+
+      if (!decoded.csrf || !decoded.intent) {
+        throw new BadRequestException('Malformed OAuth state');
+      }
+
+      if (decoded.intent === 'destination' && !decoded.userId) {
+        throw new BadRequestException('Invalid destination flow state');
+      }
     } catch {
       throw new BadRequestException('Invalid OAuth state');
     }

@@ -12,7 +12,7 @@ export class TransferProcessorService {
     const updated = await this.prisma.transferJob.updateMany({
       where: {
         id: jobId,
-        status: TransferStatus.PENDING,
+         status: { in: [TransferStatus.PENDING, TransferStatus.RUNNING] }
       },
       data: {
         status: TransferStatus.RUNNING,

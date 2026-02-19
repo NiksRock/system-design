@@ -29,7 +29,9 @@ export class PreScanService {
 
     const visited = new Set<string>();
     const queue: QueueNode[] = [];
-
+    if (queue.length > MAX_ITEMS) {
+      throw new ForbiddenException('MAX ITEMS limit exceeded during seeding');
+    }
     // Seed
     const seedFiles = await Promise.all(
       sourceFileIds.map((fileId) =>
