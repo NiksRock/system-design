@@ -1,24 +1,19 @@
-import { getCurrentUser } from "@/lib/auth";
-import { queryKeys } from "@/lib/query-keys";
-import { createQueryClient } from "@/lib/react-query";
-import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
-import { redirect } from "next/navigation";
-import DashboardClient from "./dashboard.client";
+import DashboardHeader from "@/components/dashboard/dashboard-header";
+import ConnectionCards from "@/components/dashboard/connection-cards";
+import ExplorerLayout from "@/components/dashboard/explorer-layout";
+import BottomTransferPanel from "@/components/dashboard/bottom-transfer-panel";
 
-export default async function DashboardPage() {
-const queryClient=createQueryClient()
-
-  const user = await getCurrentUser().catch(() => null);
-
-  if (!user) redirect("/login");
-
-  queryClient.setQueryData(queryKeys.me, user);
-
-  const dehydratedState = dehydrate(queryClient);
-
+export default function DashboardPage() {
   return (
-    <HydrationBoundary state={dehydratedState}>
-      <DashboardClient />
-    </HydrationBoundary>
+    <div className="min-h-screen flex flex-col bg-background text-foreground">
+      <DashboardHeader />
+
+      <main className="flex-1 p-6 max-w-[1600px] mx-auto w-full flex flex-col gap-6">
+        <ConnectionCards />
+        <ExplorerLayout />
+      </main>
+
+      <BottomTransferPanel />
+    </div>
   );
 }
