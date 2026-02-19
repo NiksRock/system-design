@@ -20,8 +20,12 @@ type GoogleUserInfo = {
   sub: string;
   email: string;
   email_verified: boolean;
+  name?: string;        // ✅ ADD THIS
+  given_name?: string;  // optional but recommended
+  family_name?: string; // optional but recommended
   picture?: string;
 };
+
 
 @Injectable()
 export class AuthService {
@@ -47,6 +51,46 @@ export class AuthService {
 
     return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
   }
+async getCurrentUser(userId: string) {
+  const user = await this.prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      email: true,
+      primarySourceAccountId: true,
+      destinationAccountId: true,
+      primarySourceAccount: {
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          avatarUrl: true,
+        },
+      },
+      destinationAccount: {
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          avatarUrl: true,
+        },
+      },
+    },
+  });
+
+  if (!user) {
+    throw new UnauthorizedException('User not found');
+  }
+
+  return {
+    user: {
+      id: user.id,
+      email: user.email,
+    },
+    sourceAccount: user.primarySourceAccount,
+    destinationAccount: user.destinationAccount,
+  };
+}
 
   async verifyJwt(token: string): Promise<{ sub: string }> {
     try {
@@ -160,11 +204,13 @@ export class AuthService {
         },
         update: {
           avatarUrl: profile.picture ?? null,
+          name: profile.name ?? null,     
           refreshTokenEncrypted: encryptedRefresh,
         },
         create: {
           userId: user.id,
           email: profile.email,
+          name: profile.name ?? null,     
           avatarUrl: profile.picture ?? null,
           refreshTokenEncrypted: encryptedRefresh,
         },

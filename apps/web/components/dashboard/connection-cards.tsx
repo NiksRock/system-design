@@ -1,20 +1,24 @@
 'use client';
 import { useMe } from "@/hooks/useMe";
 import Image from "next/image";
+import { MouseEventHandler } from "react";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL!;
 function ConnectionCards() {
   const { data } = useMe();
-
   if (!data) return null;
+  const handleAddDestination = () => {
+    window.location.href = `${API_URL}/auth/google?intent=destination`;
+  };
   return (
     <section className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-4 items-center">
       <AccountCard
+        isSource={true}
         profile={{
-          title: "Source Account",
-          email: "source@example.com",
-          name: data.user.sub,
-          picture:
-            "https://lh3.googleusercontent.com/aida-public/AB6AXuBTGjy5o4lf7MOKu-Og0UJAlg4RZkQ4lIX1e3W4iVzPriAe_HVJVDmDZa4cFcHQSwv8W6h2fsPXiC26gPgODf6eUjGW-wg73d4OeWqR1vL2w36L1N2VTyHCGVwRl8TjTr4UFajt-31HwW26RxZfZUoa9vhqZc4yQaplZ3Qy3MWbjV_t5ilsWXZJBzqGMksbtMBr9RJ8CwzNBI5Qii8Eqh6aDnStFX93KVYXzMKnyQ5utd_AEEzsFmjumK7WPI8Eb7L4aiIsadIavqeK",
+          title: data.sourceAccount?.name,
+          email: data.sourceAccount?.email,
+          name: data.sourceAccount?.name,
+          picture: data.sourceAccount?.avatarUrl
         }}
       />
       <div className="flex justify-center text-slate-300 dark:text-slate-600">
@@ -22,7 +26,16 @@ function ConnectionCards() {
           arrow_forward
         </span>
       </div>
-      <AccountCard isNew />
+      <AccountCard
+        isNew={!data.destinationAccount}
+        profile={{
+          title: data.destinationAccount?.name,
+          email: data.destinationAccount?.email,
+          name: data.destinationAccount?.name,
+          picture: data.destinationAccount?.avatarUrl
+        }}
+        onChange={handleAddDestination}
+      />
     </section>
   );
 }
@@ -30,21 +43,24 @@ function ConnectionCards() {
 export default ConnectionCards;
 
 const AccountCard = ({
+  isSource = false,
   isNew,
-  profile,
+  profile, onChange
 }: {
+  isSource?: boolean
   isNew?: boolean;
   profile?: {
-    title: string;
-    email: string;
-    name: string;
-    picture: string;
-    onChange?: () => void;
+    title: string | null | undefined;
+    email: string | null | undefined;
+    name: string | null | undefined;
+    picture: string | null | undefined;
+
   } | null;
+  onChange?: MouseEventHandler<HTMLButtonElement>
 }) => {
   if (isNew)
     return (
-      <button className="w-full group focus:outline-none cursor-pointer">
+      <button className="w-full group focus:outline-none cursor-pointer" onClick={onChange}>
         <div
           className="relative bg-white dark:bg-gray-800 border-2 border-dashed border-gray-200
          dark:border-gray-700 rounded-2xl p-5 flex items-center shadow-sm transition-all 
@@ -114,9 +130,12 @@ const AccountCard = ({
             </p>
           </div>
         </div>
-        <button className="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-primary dark:hover:text-primary px-3 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+        {!isSource && <button 
+        className="text-sm font-medium text-slate-600 dark:text-slate-300 
+        hover:text-primary dark:hover:text-primary px-3 py-1.5 rounded-lg
+         hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"onClick={onChange}>
           Change
-        </button>
+        </button>}
       </div>
     );
 };

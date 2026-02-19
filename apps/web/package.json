@@ -22,6 +22,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.574.0",
+    "material-symbols": "^0.40.2",
     "next": "16.1.5",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

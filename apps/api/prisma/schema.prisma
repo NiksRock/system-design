@@ -42,7 +42,8 @@ model User {
 model GoogleAccount {
   id String @id @default(uuid()) @db.Uuid
   userId String @db.Uuid
-
+  
+  name                  String?
   email                 String
   avatarUrl             String?
   refreshTokenEncrypted String

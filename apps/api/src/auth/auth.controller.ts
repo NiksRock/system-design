@@ -177,9 +177,7 @@ export class AuthController {
   @UseGuards(JwtGuard)
   @Get('me')
   me(@Req() req: FastifyRequest) {
-    return {
-      user: req.user,
-    };
+    return this.auth.getCurrentUser(req.user!.sub);
   }
 
   // =====================================

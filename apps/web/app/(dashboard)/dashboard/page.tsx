@@ -17,7 +17,7 @@ export default async function DashboardPage() {
   });
 
   return (
-    <Providers dehydratedState={dehydratedState}>
+    <Providers dehydratedState={dehydratedState||{}}>
       <ConnectionCards/>
     </Providers>
   );
