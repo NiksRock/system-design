@@ -7,18 +7,27 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PreScanService } from './prescan/prescan.service.js';
+import { TransferQueue } from './queue/transfer.queue.js';
 import { CreateTransferDto } from './transfers.dto.js';
-import { TransferStatus } from '@prisma/client';
 
 @Injectable()
 export class TransfersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly prescan: PreScanService,
+    private readonly queue: TransferQueue,
   ) {}
 
+  /**
+   * Creates a transfer job.
+   *
+   * Guarantees:
+   * - Atomic DB write
+   * - No nested transactions
+   * - Queue enqueue only after commit
+   */
   async createTransfer(userId: string, dto: CreateTransferDto) {
-    return this.prisma.$transaction(async (tx) => {
+    const job = await this.prisma.$transaction(async (tx) => {
       const user = await tx.user.findUnique({
         where: { id: userId },
         select: {
@@ -35,9 +44,7 @@ export class TransfersService {
         throw new ForbiddenException('Destination account not configured');
       }
 
-      if (
-        user.primarySourceAccountId === user.destinationAccountId
-      ) {
+      if (user.primarySourceAccountId === user.destinationAccountId) {
         throw new ForbiddenException(
           'Source and destination cannot be the same account',
         );
@@ -71,14 +78,13 @@ export class TransfersService {
         });
       }
 
-      const job = await tx.transferJob.create({
+      return tx.transferJob.create({
         data: {
           userId,
           sourceAccountId: sourceAccount.id,
           destinationAccountId: destinationAccount.id,
           destinationFolderId: dto.destinationFolderId,
           mode: dto.mode,
-          status: TransferStatus.PENDING,
           totalItems: prescanResult.totalItems,
           totalBytes: prescanResult.totalBytes,
           riskFlags: prescanResult.riskFlags,
@@ -92,9 +98,11 @@ export class TransfersService {
           createdAt: true,
         },
       });
-
-      return job;
     });
+
+    await this.queue.enqueue(job.id);
+
+    return job;
   }
 
   async listTransfers(userId: string) {

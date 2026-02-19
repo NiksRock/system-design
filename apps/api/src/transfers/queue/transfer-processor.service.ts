@@ -9,28 +9,22 @@ export class TransferProcessorService {
   constructor(private readonly prisma: PrismaService) {}
 
   async process(jobId: string): Promise<void> {
-    const job = await this.prisma.transferJob.findUnique({
-      where: { id: jobId },
-      select: { id: true, status: true },
-    });
-
-    if (!job) {
-      return;
-    }
-
-    if (job.status !== TransferStatus.PENDING) {
-      return;
-    }
-
-    await this.prisma.transferJob.update({
-      where: { id: jobId },
+    const updated = await this.prisma.transferJob.updateMany({
+      where: {
+        id: jobId,
+        status: TransferStatus.PENDING,
+      },
       data: {
         status: TransferStatus.RUNNING,
         startedAt: new Date(),
       },
     });
 
-    // Placeholder until TransferItem processor implemented
+    if (updated.count === 0) {
+      return;
+    }
+
+    // Placeholder
 
     await this.prisma.transferJob.update({
       where: { id: jobId },

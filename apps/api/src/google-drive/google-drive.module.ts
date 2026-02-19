@@ -1,8 +1,7 @@
-// apps/api/src/google-drive/google-drive.module.ts
-
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { GoogleDriveService } from './google-drive.service.js';
 
+@Global()
 @Module({
   providers: [GoogleDriveService],
   exports: [GoogleDriveService],

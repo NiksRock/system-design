@@ -29,6 +29,10 @@ export class GoogleDriveService {
   // ==============================
   // PUBLIC METHODS
   // ==============================
+  clearAccountCache(accountId: string): void {
+    this.tokenCache.delete(accountId);
+    this.refreshMutex.delete(accountId);
+  }
 
   async listChildren(
     accountId: string,
@@ -177,7 +181,9 @@ export class GoogleDriveService {
       return (await response.json()) as T;
     } catch {
       if (attempt < 3) {
-        await this.delay(100 * 3 ** attempt);
+        const jitter = Math.random() * 100;
+        await this.delay(100 * 2 ** attempt + jitter);
+
         return this.request<T>(
           accountId,
           refreshTokenEncrypted,

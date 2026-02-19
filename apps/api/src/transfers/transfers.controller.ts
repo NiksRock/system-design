@@ -12,10 +12,7 @@ export class TransfersController {
   constructor(private readonly transfers: TransfersService) {}
 
   @Post()
-  async create(
-    @Body() dto: CreateTransferDto,
-    @Req() req: FastifyRequest,
-  ) {
+  async create(@Body() dto: CreateTransferDto, @Req() req: FastifyRequest) {
     return this.transfers.createTransfer(req.user!.sub, dto);
   }
 

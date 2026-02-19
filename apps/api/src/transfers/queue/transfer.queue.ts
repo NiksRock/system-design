@@ -24,11 +24,7 @@ export class TransferQueue implements OnModuleDestroy {
   }
 
   async enqueue(jobId: string): Promise<void> {
-    await this.queue.add(
-      'process-transfer',
-      { jobId },
-      { jobId },
-    );
+    await this.queue.add('process-transfer', { jobId }, { jobId });
   }
 
   async onModuleDestroy(): Promise<void> {

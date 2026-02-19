@@ -3,7 +3,7 @@
 export default function Home() {
   const setDestination = () => {
     window.location.href =
-      'http://localhost:3001/api/auth/google?intent=destination';
+      "http://localhost:3001/api/auth/google?intent=destination";
   };
   const logout = async () => {
     try {

@@ -11,6 +11,7 @@ import { PrismaModule } from './prisma/prisma.module.js';
 import { RedisModule } from './redis/redis.module.js';
 import { AccountsModule } from './accounts/accounts.module.js';
 import { TransfersModule } from './transfers/transfers.module.js';
+import { GoogleDriveModule } from './google-drive/google-drive.module.js';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -32,8 +33,9 @@ import { TransfersModule } from './transfers/transfers.module.js';
     AuthModule,
     PrismaModule,
     RedisModule,
+    GoogleDriveModule,
     AccountsModule,
-    TransfersModule
+    TransfersModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],

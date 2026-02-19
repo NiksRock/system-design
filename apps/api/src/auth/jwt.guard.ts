@@ -15,11 +15,7 @@ type JwtPayload = {
 
 @Injectable()
 export class JwtGuard implements CanActivate {
-  constructor(private readonly jwt: JwtService) {
-    
-  }
-
-  
+  constructor(private readonly jwt: JwtService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context
@@ -34,33 +30,20 @@ export class JwtGuard implements CanActivate {
 
     try {
       const payload = await this.jwt.verifyAsync<JwtPayload>(token);
-
       request.user = payload;
-
       return true;
-    } catch (err: unknown) {
-      if (
-        typeof err === 'object' &&
-        err !== null &&
-        'name' in err &&
-        err.name === 'TokenExpiredError'
-      ) {
-        throw new UnauthorizedException('Invalid or expired token');
-      }
-
+    } catch {
       throw new UnauthorizedException('Invalid or expired token');
     }
   }
 
   private extractToken(request: FastifyRequest): string | undefined {
-    // 1️⃣ Authorization header (Bearer)
     const authHeader = request.headers.authorization;
-console.log(request.cookies);
+
     if (authHeader?.startsWith('Bearer ')) {
       return authHeader.slice(7);
     }
 
-    // 2️⃣ HttpOnly cookie
-    return request.cookies?.access_token;
+    return request.cookies?.access_token as string | undefined;
   }
 }

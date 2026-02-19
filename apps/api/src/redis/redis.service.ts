@@ -9,14 +9,13 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   constructor(private readonly config: ConfigService) {}
 
   async onModuleInit(): Promise<void> {
-    this.client = new Redis(
-      this.config.getOrThrow<string>('REDIS_URL'),
-      {
-        maxRetriesPerRequest: 1,
-        enableReadyCheck: true,
-      },
-    );
- 
+    this.client = new Redis(this.config.getOrThrow<string>('REDIS_URL'), {
+      maxRetriesPerRequest: 1,
+      enableReadyCheck: true,
+    });
+    this.client.on('error', (err) => {
+      console.error('Redis error', err);
+    });
   }
 
   getClient(): Redis {

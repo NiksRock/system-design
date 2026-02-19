@@ -95,17 +95,29 @@ export class AuthController {
     const cookieState = (req.cookies as Record<string, string> | undefined)
       ?.oauth_state;
 
-    if (!state || state !== cookieState) {
+    if (!cookieState) {
+      throw new BadRequestException('Missing OAuth state cookie');
+    }
+
+    if (!state) {
+      throw new BadRequestException('Missing OAuth state');
+    }
+
+    let decoded: { csrf: string; intent: OAuthIntent; userId?: string };
+
+    try {
+      decoded = JSON.parse(Buffer.from(state, 'base64').toString('utf8'));
+    } catch {
+      throw new BadRequestException('Invalid OAuth state');
+    }
+
+    if (state !== cookieState || !decoded.csrf) {
       throw new BadRequestException('Invalid OAuth state');
     }
 
     if (!code) {
       throw new BadRequestException('Missing code');
     }
-
-    const decoded = JSON.parse(
-      Buffer.from(state, 'base64').toString('utf8'),
-    ) as { csrf: string; intent: OAuthIntent; userId?: string };
 
     const user = await this.auth.handleGoogleCallback(
       code,
