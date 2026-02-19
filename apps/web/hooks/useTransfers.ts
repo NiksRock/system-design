@@ -16,7 +16,9 @@ export type Transfer = {
 
 export function useTransfers() {
   return useQuery({
-    queryKey: queryKeys.transfers,
+    queryKey: queryKeys.transfers.list,
     queryFn: () => clientFetch<Transfer[]>("/transfers"),
+    refetchInterval: 5000,
+    staleTime: 2000,
   });
 }

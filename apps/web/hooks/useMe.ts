@@ -3,19 +3,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { clientFetch } from "@/lib/api.client";
 import { queryKeys } from "@/lib/query-keys";
-
-type MeResponse = {
-  user: {
-    sub: string;
-    iat: number;
-    exp: number;
-  };
-};
+import type { MeResponse } from "@/lib/auth";
 
 export function useMe() {
   return useQuery({
-    queryKey: queryKeys.me,
+    queryKey: queryKeys.auth.me,
     queryFn: () => clientFetch<MeResponse>("/auth/me"),
-    staleTime: Infinity,
+    staleTime: 1000 * 60 * 5,
   });
 }

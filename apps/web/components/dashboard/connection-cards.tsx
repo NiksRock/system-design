@@ -1,13 +1,18 @@
+'use client';
+import { useMe } from "@/hooks/useMe";
 import Image from "next/image";
 
 function ConnectionCards() {
+  const { data } = useMe();
+
+  if (!data) return null;
   return (
     <section className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-4 items-center">
       <AccountCard
         profile={{
           title: "Source Account",
           email: "source@example.com",
-          name: "John Doe",
+          name: data.user.sub,
           picture:
             "https://lh3.googleusercontent.com/aida-public/AB6AXuBTGjy5o4lf7MOKu-Og0UJAlg4RZkQ4lIX1e3W4iVzPriAe_HVJVDmDZa4cFcHQSwv8W6h2fsPXiC26gPgODf6eUjGW-wg73d4OeWqR1vL2w36L1N2VTyHCGVwRl8TjTr4UFajt-31HwW26RxZfZUoa9vhqZc4yQaplZ3Qy3MWbjV_t5ilsWXZJBzqGMksbtMBr9RJ8CwzNBI5Qii8Eqh6aDnStFX93KVYXzMKnyQ5utd_AEEzsFmjumK7WPI8Eb7L4aiIsadIavqeK",
         }}
@@ -75,14 +80,21 @@ const AccountCard = ({
         <div className="flex items-center gap-4">
           <div className="relative">
             <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-slate-100 dark:border-slate-600">
-              <Image
-                height={100}
-                width={100}
-                alt={`${profile?.name || "Unknown"} Avatar`}
-                className="w-full h-full object-cover"
-                data-alt={`${profile?.name || "Unknown"} Avatar`}
-                src={profile?.picture || ""}
-              />
+              {profile?.picture ? (
+                <Image
+                  height={48}
+                  width={48}
+                  alt={`${profile.name} Avatar`}
+                  className="w-full h-full object-cover"
+                  src={profile.picture}
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-muted">
+                  <span className="material-symbols-outlined text-slate-400">
+                    person
+                  </span>
+                </div>
+              )}
             </div>
             <div className="absolute -bottom-1 -right-1 bg-white dark:bg-slate-800 rounded-full p-0.5">
               <span className="material-symbols-outlined text-green-500 !text-[18px]">

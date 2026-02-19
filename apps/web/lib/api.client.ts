@@ -85,13 +85,15 @@ export async function clientFetch<T>(
   }
 
   // Avoid JSON parsing for empty responses
-  const contentLength = res.headers.get("content-length");
-  const isEmpty =
-    contentLength === "0" ||
-    res.status === 204 ||
-    !res.headers.get("content-type")?.includes("application/json");
+let data: unknown = null;
 
-  const data = isEmpty ? null : await res.json().catch(() => null);
+if (res.status !== 204) {
+  const contentType = res.headers.get("content-type");
+  if (contentType?.includes("application/json")) {
+    data = await res.json().catch(() => null);
+  }
+}
+
 
   if (!res.ok) {
     throw new ApiError(normalizeError(res.status, data));

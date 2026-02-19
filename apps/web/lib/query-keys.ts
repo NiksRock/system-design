@@ -1,4 +1,8 @@
 export const queryKeys = {
-  me: ["me"] as const,
-  transfers: ["transfers"] as const,
+  auth: {
+    me: ["auth", "me"] as const,
+  },
+  transfers: {
+    list: ["transfers", "list"] as const,
+  },
 };
